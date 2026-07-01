@@ -1,0 +1,36 @@
+workflows:
+  ios-testflight:
+    name: iOS → TestFlight
+    max_build_duration: 60
+    integrations:
+      app_store_connect: codemagic-api-key   # name you give the key in Codemagic settings
+
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.matsb.AiTaskAssistant
+      xcode: latest
+      vars:
+        XCODE_PROJECT: "AiTaskAssistant.xcodeproj"
+        XCODE_SCHEME: "AiTaskAssistant"
+        BUNDLE_ID: "com.matsb.AiTaskAssistant"
+
+    scripts:
+      - name: Set up code signing
+        script: xcode-project use-profiles
+
+      - name: Build & archive for App Store
+        script: |
+          xcode-project build-ipa \
+            --project "$CM_BUILD_DIR/$XCODE_PROJECT" \
+            --scheme "$XCODE_SCHEME"
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        submit_to_app_store: false
