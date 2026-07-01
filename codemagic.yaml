@@ -23,16 +23,10 @@ workflows:
       - name: Revoke stale distribution certificates
         script: |
           app-store-connect certificates list --type IOS_DISTRIBUTION --json 2>/dev/null \
-            | python3 -c "
-import sys, json
-try:
-    certs = json.load(sys.stdin)
-    ids = [c['id'] for c in (certs if isinstance(certs, list) else certs.get('data', []))]
-    print('\n'.join(ids))
-except: pass
-" | while IFS= read -r id; do
-              [ -n "$id" ] && app-store-connect certificates revoke "$id" || true
-            done || true
+            | python3 -c "import sys,json;d=json.load(sys.stdin);[print(c['id']) for c in (d if isinstance(d,list) else d.get('data',[]))]" 2>/dev/null \
+            | while IFS= read -r id; do
+                [ -n "$id" ] && app-store-connect certificates revoke "$id" || true
+              done || true
 
       - name: Fetch or create signing files
         script: |
