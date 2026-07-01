@@ -35,6 +35,9 @@ workflows:
       - name: Set up code signing
         script: xcode-project use-profiles
 
+      - name: Download Metal Toolchain
+        script: xcodebuild -downloadComponent MetalToolchain
+
       - name: Build & archive for App Store
         script: |
           xcode-project build-ipa \
