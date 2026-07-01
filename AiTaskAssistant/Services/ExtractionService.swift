@@ -85,7 +85,7 @@ actor ExtractionService {
                 input: UserInput(messages: messages)
             )
             var fullText = ""
-            for await generation in MLXLMCommon.generate(
+            for await generation in try MLXLMCommon.generate(
                 input: lmInput,
                 parameters: GenerateParameters(temperature: 0.1),
                 context: context
