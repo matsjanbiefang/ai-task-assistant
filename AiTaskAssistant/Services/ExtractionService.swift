@@ -83,12 +83,15 @@ actor ExtractionService {
             let lmInput = try await context.processor.prepare(
                 input: UserInput(messages: messages)
             )
-            let result = try MLXLMCommon.generate(
+            var fullText = ""
+            for await generation in MLXLMCommon.generate(
                 input: lmInput,
                 parameters: GenerateParameters(temperature: 0.1),
                 context: context
-            )
-            return result.output
+            ) {
+                fullText += generation.text
+            }
+            return fullText
         }
 
         return try parseJSON(output)
