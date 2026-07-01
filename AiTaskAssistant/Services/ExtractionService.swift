@@ -1,77 +1,130 @@
 import Foundation
-import FoundationModels
+import MLXLLM
+import MLXLMCommon
 
-// MARK: - Schema
+// MARK: - Schema (plain Codable — no Foundation Models needed)
 
-@Generable
 enum TaskPriority: String, Codable, CaseIterable {
     case low, medium, high
 }
 
-@Generable
 enum TaskCategory: String, Codable, CaseIterable {
     case work, personal, health, shopping, finance, other
 }
 
-@Generable
 struct ExtractedTask {
-    @Guide(description: "Short, action-oriented task title derived from the input. Omit filler words.")
     var title: String
-
-    @Guide(description: "Due date in ISO 8601 format (YYYY-MM-DD). Resolve relative expressions like 'tomorrow' or 'next Friday' against today's date. Null if no date mentioned.")
     var dueDate: String?
-
-    @Guide(description: "Due time in HH:MM (24h) format if an explicit time was mentioned. Null otherwise.")
     var dueTime: String?
-
-    @Guide(description: "Priority level. Set ONLY when the input contains an explicit signal such as 'urgent', 'ASAP', 'high priority', 'low priority'. Null otherwise — do not infer priority silently.")
     var priority: TaskPriority?
-
-    @Guide(description: "Category from the fixed set. Set ONLY when the input contains an explicit project name or category signal (e.g. 'for work', 'health appointment', 'grocery'). Null otherwise.")
     var category: TaskCategory?
-
-    @Guide(description: "Confidence level for the due date extraction (0.0 = not confident, 1.0 = fully confident). Low confidence should be shown to the user as an indicator.")
     var dateConfidence: Double
 }
 
-@Generable
-struct ExtractionResult {
-    @Guide(description: "List of extracted tasks. One input may produce multiple tasks if the user described several distinct actions.")
-    var tasks: [ExtractedTask]
+// MARK: - Loading state (observed by ModelLoadingView)
+
+@Observable
+@MainActor
+final class LLMState {
+    static let shared = LLMState()
+    var progress: Double = 0
+    var isReady = false
+    var errorMessage: String?
 }
 
 // MARK: - Service
 
 actor ExtractionService {
-    private let session: LanguageModelSession
+    static let shared = ExtractionService()
 
-    init() {
-        session = LanguageModelSession()
+    private var container: ModelContainer?
+    private let modelID = "mlx-community/Llama-3.2-1B-Instruct-4bit"
+
+    func load() async {
+        guard container == nil else {
+            await MainActor.run { LLMState.shared.isReady = true }
+            return
+        }
+        do {
+            let c = try await LLMModelFactory.shared.loadContainer(
+                configuration: ModelConfiguration(id: modelID)
+            ) { progress in
+                Task { @MainActor in
+                    LLMState.shared.progress = progress.fractionCompleted
+                }
+            }
+            container = c
+            await MainActor.run { LLMState.shared.isReady = true }
+        } catch {
+            await MainActor.run { LLMState.shared.errorMessage = error.localizedDescription }
+        }
     }
 
     func extract(from input: String, referenceDate: Date = .now) async throws -> [ExtractedTask] {
+        if container == nil { await load() }
+        guard let container else { throw ExtractionError.modelNotLoaded }
+
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withFullDate]
-        let todayString = formatter.string(from: referenceDate)
+        let today = formatter.string(from: referenceDate)
 
-        let prompt = """
-        Today's date is \(todayString).
-        Extract all tasks from the following user input. The user may describe one or multiple tasks in a single message.
-
-        Rules:
-        - Resolve relative dates ("tomorrow", "next Friday", "in two weeks") against today's date.
-        - Set priority only when there is an explicit signal in the text. Do not guess.
-        - Set category only when the user explicitly mentions a project or domain. Do not guess.
-        - If a date is mentioned but ambiguous, set dateConfidence below 0.7.
-        - If no date is mentioned, leave dueDate null and set dateConfidence to 1.0.
-
-        User input: \(input)
+        let system = """
+        Extract tasks from user input. Output ONLY valid JSON — no markdown, no explanation.
+        Today: \(today).
+        Schema: {"tasks":[{"title":"string","dueDate":"YYYY-MM-DD or null","dueTime":"HH:MM or null","priority":"low|medium|high or null","category":"work|personal|health|shopping|finance|other or null","dateConfidence":0.95}]}
+        Rules: resolve relative dates; set priority/category only if explicitly stated; dateConfidence 1.0 when no date mentioned, ≥0.9 when clear, <0.7 when ambiguous.
         """
+        let messages: [[String: String]] = [
+            ["role": "system", "content": system],
+            ["role": "user", "content": input]
+        ]
 
-        let result = try await session.respond(
-            to: prompt,
-            generating: ExtractionResult.self
-        )
-        return result.content.tasks
+        let output = try await container.perform { context in
+            let lmInput = try await context.processor.prepare(input: .messages(messages))
+            let result = try MLXLMCommon.generate(
+                input: lmInput,
+                parameters: GenerateParameters(temperature: 0.1),
+                context: context
+            )
+            return result.output
+        }
+
+        return try parseJSON(output)
     }
+
+    // MARK: - JSON parsing
+
+    private struct Root: Codable { let tasks: [JTask] }
+    private struct JTask: Codable {
+        let title: String
+        let dueDate: String?
+        let dueTime: String?
+        let priority: String?
+        let category: String?
+        let dateConfidence: Double?
+    }
+
+    private func parseJSON(_ raw: String) throws -> [ExtractedTask] {
+        var text = raw
+        if let s = raw.firstIndex(of: "{"), let e = raw.lastIndex(of: "}") {
+            text = String(raw[s...e])
+        }
+        guard let data = text.data(using: .utf8) else { throw ExtractionError.parseError }
+        let root = try JSONDecoder().decode(Root.self, from: data)
+        return root.tasks.map { t in
+            ExtractedTask(
+                title: t.title,
+                dueDate: t.dueDate,
+                dueTime: t.dueTime,
+                priority: t.priority.flatMap { TaskPriority(rawValue: $0) },
+                category: t.category.flatMap { TaskCategory(rawValue: $0) },
+                dateConfidence: t.dateConfidence ?? 1.0
+            )
+        }
+    }
+}
+
+enum ExtractionError: Error {
+    case modelNotLoaded
+    case parseError
 }

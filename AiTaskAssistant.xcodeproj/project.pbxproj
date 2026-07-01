@@ -20,6 +20,10 @@
 		A1000011 /* SpeechRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000014 /* SpeechRecognizer.swift */; };
 		A1000012 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000015 /* NotificationService.swift */; };
 		A1000013 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A2000016 /* Assets.xcassets */; };
+		A1000014 /* ModelLoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000017 /* ModelLoadingView.swift */; };
+
+		A1000015 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = A2000018 /* MLXLLM */; };
+		A1000016 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = A2000019 /* MLXLMCommon */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -37,6 +41,7 @@
 		A2000008 /* AiTaskAssistantTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AiTaskAssistantTests.swift; sourceTree = "<group>"; };
 		A2000009 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A2000016 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A2000017 /* ModelLoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelLoadingView.swift; sourceTree = "<group>"; };
 		A2000010 /* AiTaskAssistant.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AiTaskAssistant.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2000011 /* AiTaskAssistantTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AiTaskAssistantTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -46,6 +51,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A1000015 /* MLXLLM in Frameworks */,
+				A1000016 /* MLXLMCommon in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -115,6 +122,7 @@
 				A2000004 /* AssistantView.swift */,
 				A2000012 /* ExtractionHarnessView.swift */,
 				A2000013 /* TaskEditView.swift */,
+				A2000017 /* ModelLoadingView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -161,6 +169,10 @@
 			dependencies = (
 			);
 			name = AiTaskAssistant;
+			packageProductDependencies = (
+				A2000018 /* MLXLLM */,
+				A2000019 /* MLXLMCommon */,
+			);
 			productName = AiTaskAssistant;
 			productReference = A2000010 /* AiTaskAssistant.app */;
 			productType = "com.apple.product-type.application";
@@ -211,6 +223,9 @@
 			);
 			mainGroup = A4000001 /* Root */;
 			productRefGroup = A4000004 /* Products */;
+			packageReferences = (
+				A2000020 /* XCRemoteSwiftPackageReference "mlx-swift-examples" */,
+			);
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -247,6 +262,7 @@
 				A1000010 /* TaskEditView.swift in Sources */,
 				A1000011 /* SpeechRecognizer.swift in Sources */,
 				A1000012 /* NotificationService.swift in Sources */,
+				A1000014 /* ModelLoadingView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -494,6 +510,30 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		A2000020 /* XCRemoteSwiftPackageReference "mlx-swift-examples" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ml-explore/mlx-swift-examples";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = "2.0.0";
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A2000018 /* MLXLLM */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A2000020 /* XCRemoteSwiftPackageReference "mlx-swift-examples" */;
+			productName = MLXLLM;
+		};
+		A2000019 /* MLXLMCommon */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A2000020 /* XCRemoteSwiftPackageReference "mlx-swift-examples" */;
+			productName = MLXLMCommon;
+		};
+/* End XCSwiftPackageProductDependency section */
 
 	};
 	rootObject = A9000001 /* Project object */;

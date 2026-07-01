@@ -12,7 +12,7 @@ struct NoteView: View {
     @State private var speech = SpeechRecognizer()
     @FocusState private var isFocused: Bool
 
-    private let extraction = ExtractionService()
+    private let extraction = ExtractionService.shared
 
     private var isRecording: Bool { speech.state == .recording }
     private var canSubmit: Bool { !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isExtracting }
