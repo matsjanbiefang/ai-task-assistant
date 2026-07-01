@@ -1,0 +1,9 @@
+# Normalize line endings
+* text=auto
+
+# Swift and Xcode files keep LF
+*.swift text eol=lf
+*.pbxproj text eol=lf
+*.plist text eol=lf
+*.yml text eol=lf
+*.md text eol=lf
