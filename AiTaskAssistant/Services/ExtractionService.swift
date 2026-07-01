@@ -80,7 +80,9 @@ actor ExtractionService {
         ]
 
         let output = try await container.perform { context in
-            let lmInput = try await context.processor.prepare(input: .messages(messages))
+            let lmInput = try await context.processor.prepare(
+                input: UserInput(messages: messages)
+            )
             let result = try MLXLMCommon.generate(
                 input: lmInput,
                 parameters: GenerateParameters(temperature: 0.1),
