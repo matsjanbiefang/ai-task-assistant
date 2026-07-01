@@ -79,31 +79,22 @@ actor ExtractionService {
             ["role": "user", "content": input]
         ]
 
-        // perform is synchronous in current API — use it only to tokenize and capture the model
-        var capturedModel: (any LanguageModel)?
-        var capturedInput: LMInput?
-        try container.perform { model, tokenizer in
-            capturedModel = model
-            let tokenIds = try tokenizer.applyChatTemplate(
-                messages: messages,
-                addGenerationPrompt: true
+        // Explicit ModelContext type forces Swift to use the async perform overload
+        let output = try await container.perform { (context: ModelContext) in
+            let lmInput = try await context.processor.prepare(
+                input: UserInput(messages: messages)
             )
-            capturedInput = LMInput(tokens: MLXArray(tokenIds))
+            var fullText = ""
+            for await generation in MLXLMCommon.generate(
+                input: lmInput,
+                parameters: GenerateParameters(temperature: 0.1),
+                context: context
+            ) {
+                fullText += generation.text
+            }
+            return fullText
         }
-        guard let model = capturedModel, let lmInput = capturedInput else {
-            throw ExtractionError.modelNotLoaded
-        }
-
-        // Generate asynchronously outside perform
-        var fullText = ""
-        for await generation in MLXLMCommon.generate(
-            input: lmInput,
-            parameters: GenerateParameters(temperature: 0.1),
-            model: model
-        ) {
-            fullText += generation.text
-        }
-        return try parseJSON(fullText)
+        return try parseJSON(output)
     }
 
     // MARK: - JSON parsing
