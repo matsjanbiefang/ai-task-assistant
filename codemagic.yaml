@@ -3,12 +3,9 @@ workflows:
     name: iOS → TestFlight
     max_build_duration: 60
     integrations:
-      app_store_connect: codemagic-api-key   # name you give the key in Codemagic settings
+      app_store_connect: codemagic-api-key
 
     environment:
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.matsb.AiTaskAssistant
       xcode: latest
       vars:
         XCODE_PROJECT: "AiTaskAssistant.xcodeproj"
@@ -16,6 +13,12 @@ workflows:
         BUNDLE_ID: "com.matsb.AiTaskAssistant"
 
     scripts:
+      - name: Fetch or create signing files
+        script: |
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create
+
       - name: Set up code signing
         script: xcode-project use-profiles
 
