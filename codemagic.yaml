@@ -20,6 +20,20 @@ workflows:
         script: |
           openssl genrsa -out /tmp/ios_dist_key.pem 2048
 
+      - name: Revoke stale distribution certificates
+        script: |
+          app-store-connect certificates list --type IOS_DISTRIBUTION --json 2>/dev/null \
+            | python3 -c "
+import sys, json
+try:
+    certs = json.load(sys.stdin)
+    ids = [c['id'] for c in (certs if isinstance(certs, list) else certs.get('data', []))]
+    print('\n'.join(ids))
+except: pass
+" | while IFS= read -r id; do
+              [ -n "$id" ] && app-store-connect certificates revoke "$id" || true
+            done || true
+
       - name: Fetch or create signing files
         script: |
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
