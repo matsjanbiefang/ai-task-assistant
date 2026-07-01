@@ -7,6 +7,8 @@ workflows:
 
     environment:
       xcode: latest
+      groups:
+        - ios
       vars:
         XCODE_PROJECT: "AiTaskAssistant.xcodeproj"
         XCODE_SCHEME: "AiTaskAssistant"
