@@ -90,7 +90,7 @@ actor ExtractionService {
                 parameters: GenerateParameters(temperature: 0.1),
                 context: context
             ) {
-                fullText += generation.text
+                fullText += generation.output
             }
             return fullText
         }
