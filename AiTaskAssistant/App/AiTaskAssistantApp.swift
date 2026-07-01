@@ -41,7 +41,7 @@ class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate, @uncheck
         if response.notification.request.content.userInfo["destination"] as? String == "assistant" {
             // Open the app and navigate to Slide 2
             if let url = URL(string: "aitask://assistant") {
-                UIApplication.shared.open(url)
+                Task { @MainActor in UIApplication.shared.open(url) }
             }
         }
         completionHandler()

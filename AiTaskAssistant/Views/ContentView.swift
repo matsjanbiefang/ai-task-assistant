@@ -21,11 +21,6 @@ struct ContentView: View {
                 deepLinkDestination = nil
             }
         }
-        .onContinueUserActivity(NSStringFromClass(AddTaskIntent.self)) { _ in
-            // M4-1: Siri opened the app via AddTaskIntent — go to Slide 1 and start dictation
-            selectedTab = 0
-            activateDictation = true
-        }
         .task {
             // M3-1: request notification permission on first launch
             _ = await NotificationService.shared.requestPermission()

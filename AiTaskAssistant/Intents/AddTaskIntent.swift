@@ -11,7 +11,7 @@ struct AddTaskIntent: AppIntent {
     )
 
     // M4-2: Siri phrase — users can say "Add a task to my assistant"
-    static var openAppWhenRun: Bool = true
+    static let openAppWhenRun = true
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
         // M4-3: brief voice confirmation — Siri speaks this back to the user

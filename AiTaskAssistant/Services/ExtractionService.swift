@@ -3,11 +3,13 @@ import FoundationModels
 
 // MARK: - Schema
 
-enum TaskPriority: String, Codable, CaseIterable, Generable {
+@Generable
+enum TaskPriority: String, Codable, CaseIterable {
     case low, medium, high
 }
 
-enum TaskCategory: String, Codable, CaseIterable, Generable {
+@Generable
+enum TaskCategory: String, Codable, CaseIterable {
     case work, personal, health, shopping, finance, other
 }
 
