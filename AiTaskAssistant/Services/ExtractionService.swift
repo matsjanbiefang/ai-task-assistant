@@ -79,22 +79,31 @@ actor ExtractionService {
             ["role": "user", "content": input]
         ]
 
-        let output = try await container.perform { context in
-            let lmInput = try await context.processor.prepare(
-                input: UserInput(messages: messages)
+        // perform is synchronous in current API — use it only to tokenize and capture the model
+        var capturedModel: (any LanguageModel)?
+        var capturedInput: LMInput?
+        try container.perform { model, tokenizer in
+            capturedModel = model
+            let tokenIds = try tokenizer.applyChatTemplate(
+                messages: messages,
+                addGenerationPrompt: true
             )
-            var fullText = ""
-            for await generation in MLXLMCommon.generate(
-                input: lmInput,
-                parameters: GenerateParameters(temperature: 0.1),
-                context: context
-            ) {
-                fullText += generation.text
-            }
-            return fullText
+            capturedInput = LMInput(tokens: MLXArray(tokenIds))
+        }
+        guard let model = capturedModel, let lmInput = capturedInput else {
+            throw ExtractionError.modelNotLoaded
         }
 
-        return try parseJSON(output)
+        // Generate asynchronously outside perform
+        var fullText = ""
+        for await generation in MLXLMCommon.generate(
+            input: lmInput,
+            parameters: GenerateParameters(temperature: 0.1),
+            model: model
+        ) {
+            fullText += generation.text
+        }
+        return try parseJSON(fullText)
     }
 
     // MARK: - JSON parsing
