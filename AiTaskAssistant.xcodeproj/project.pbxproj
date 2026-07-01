@@ -19,6 +19,7 @@
 		A1000010 /* TaskEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000013 /* TaskEditView.swift */; };
 		A1000011 /* SpeechRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000014 /* SpeechRecognizer.swift */; };
 		A1000012 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000015 /* NotificationService.swift */; };
+		A1000013 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A2000016 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -35,6 +36,7 @@
 		A2000007 /* AddTaskIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddTaskIntent.swift; sourceTree = "<group>"; };
 		A2000008 /* AiTaskAssistantTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AiTaskAssistantTests.swift; sourceTree = "<group>"; };
 		A2000009 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A2000016 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A2000010 /* AiTaskAssistant.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AiTaskAssistant.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2000011 /* AiTaskAssistantTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AiTaskAssistantTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -74,6 +76,7 @@
 				A4000007 /* Models */,
 				A4000008 /* Services */,
 				A4000009 /* Intents */,
+				A2000016 /* Assets.xcassets */,
 				A2000009 /* Info.plist */,
 			);
 			path = AiTaskAssistant;
@@ -222,6 +225,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A1000013 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
