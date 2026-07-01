@@ -90,7 +90,9 @@ actor ExtractionService {
                 parameters: GenerateParameters(temperature: 0.1),
                 context: context
             ) {
-                fullText += generation
+                if let chunk = generation.chunk {
+                    fullText += chunk
+                }
             }
             return fullText
         }
