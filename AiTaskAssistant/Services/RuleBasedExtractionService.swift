@@ -81,6 +81,10 @@ struct LanguageRules: Sendable {
     let categoryKeywords: [TaskCategory: [String]]
     // Feedback round 3 — clause-classification pipeline fields:
     let placeKeywords: [String: String]            // lowercase keyword (word-start match) -> canonical place display value
+    // Feedback round 5: a street/address name ("Greenwood Avenue") is never going to be in a
+    // fixed keyword list — this instead recognizes the SHAPE "at/on/in <words> <street-type
+    // word>" and captures the whole phrase, regardless of which specific street it names.
+    let addressPattern: String?
     let fillerPrefixes: [String]                   // modal/discourse lead-ins stripped from clause start ("i need to", "ich muss")
     let fillerWords: [String]                      // discourse fillers stripped from clause edges ("also", "bitte", "nicht vergessen")
     let detailPatterns: [String]                   // full-clause regexes marking a clause as a DETAIL of the previous action
@@ -116,6 +120,7 @@ struct LanguageRules: Sendable {
         priorityPrefixes: [(pattern: String, priority: TaskPriority)],
         categoryKeywords: [TaskCategory: [String]],
         placeKeywords: [String: String],
+        addressPattern: String? = nil,
         fillerPrefixes: [String],
         fillerWords: [String],
         detailPatterns: [String],
@@ -145,6 +150,7 @@ struct LanguageRules: Sendable {
         self.priorityPrefixes = priorityPrefixes
         self.categoryKeywords = categoryKeywords
         self.placeKeywords = placeKeywords
+        self.addressPattern = addressPattern
         self.fillerPrefixes = fillerPrefixes
         self.fillerWords = fillerWords
         self.detailPatterns = detailPatterns
@@ -375,6 +381,9 @@ struct RuleBasedExtractionService: Sendable {
             title = cleanTitle(stripped, fallback: rawSubLine, rulesList: rulesList)
         }
         if place == nil {
+            place = placeAddressMatch(in: rawSubLine, rulesList: rulesList)
+        }
+        if place == nil {
             place = placeKeywordMatch(in: rawSubLine, rulesList: rulesList)
         }
 
@@ -489,6 +498,24 @@ struct RuleBasedExtractionService: Sendable {
                     return canonical
                 }
             }
+        }
+        return nil
+    }
+
+    // A street/address name ("Greenwood Avenue") is never going to be in a fixed keyword list —
+    // this recognizes the SHAPE "at/on/in <words> <street-type word>" instead of any specific
+    // name, so it generalizes to any address rather than only the ones hand-listed like
+    // placeKeywords. Tried against the ORIGINAL line (not the date/time-stripped text) since the
+    // address itself is never part of what gets stripped anyway.
+    private func placeAddressMatch(in text: String, rulesList: [LanguageRules]) -> String? {
+        for rules in rulesList {
+            guard let pattern = rules.addressPattern,
+                  let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+                  let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+                  match.numberOfRanges > 1,
+                  let range = Range(match.range(at: 1), in: text) else { continue }
+            let words = text[range].split(separator: " ").map { $0.prefix(1).uppercased() + $0.dropFirst() }
+            return words.joined(separator: " ")
         }
         return nil
     }
@@ -1045,6 +1072,7 @@ extension RuleBasedExtractionService {
             "restaurant": "Restaurant", "church": "Church", "library": "Library",
             "town hall": "Town hall", "hardware store": "Hardware store",
         ],
+        addressPattern: #"\b(?:at|on|in)\s+([a-z0-9]+(?:\s+[a-z0-9]+){0,3}\s+(?:street|st|avenue|ave|road|rd|lane|drive|boulevard|square|plaza|way|court|circle))\b"#,
         fillerPrefixes: [
             "i need to", "i have to", "i must", "i should", "i want to", "i would like to",
             "i wanna", "i gotta", "i'd like to", "i think i need to", "i really need to",
@@ -1130,6 +1158,9 @@ extension RuleBasedExtractionService {
             "post": "Post", "bäcker": "Bäcker", "restaurant": "Restaurant", "kirche": "Kirche",
             "bibliothek": "Bibliothek", "rathaus": "Rathaus",
         ],
+        // German compounds street names directly onto the suffix ("Bahnhofstraße"), unlike
+        // English's separate words — captures one compound word ending in a street-type suffix.
+        addressPattern: #"\b(?:in der|an der|bei der|in|an|bei)\s+([\wäöüß]+(?:straße|strasse|allee|weg|platz|gasse))\b"#,
         fillerPrefixes: [
             "ich muss noch", "ich muss unbedingt", "ich muss mal", "ich muss", "ich müsste",
             "ich sollte", "ich soll", "ich will", "ich möchte", "wir müssen", "wir sollten",

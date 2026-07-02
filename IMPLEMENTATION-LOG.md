@@ -1038,3 +1038,77 @@ vague-time/later-offset behavior, including the explicit non-collision regressio
 
 **Status:** compiled-but-unverified pending CI; bumped to build 8. Mic crash remains the one
 open item with genuinely no confirmed root cause.
+
+---
+
+## Real-Device Feedback Round 5 — 2026-07-02
+
+Fifth round, testing build 8. Five items.
+
+### Mic crash — second occurrence, second real crash log, confirmed and fixed
+
+Build 8 still crashed. This time got the crash log directly from App Store Connect (the user's
+browser session had to be re-authenticated — I don't log in myself, so I asked them to do it).
+**Exact same class of bug as round 4's fix**, but in a different closure: `dispatch_assert_queue_
+fail` / `_swift_task_checkIsolatedSwift`, this time inside `SpeechRecognizer.startRecording()`'s
+audio tap callback (`inputNode.installTap(...) { buffer, _ in req.append(buffer) }`). That closure
+is lexically inside a method of the `@MainActor` class, so the compiler infers it as MainActor-
+isolated — but `AVAudioEngine` actually invokes it on its own dedicated realtime audio thread,
+never the main thread, and Swift 6's runtime isolation check crashes on the mismatch. Round 4's
+fix only addressed the OTHER MainActor-inference crash (in `requestPermissions()`'s completion
+closure) — this is a structurally identical but separate instance of the same root problem.
+Fixed by extracting the tap installation into a `nonisolated private static func installTap(on
+engine:request:)` that touches only its own parameters, never `self` or any MainActor state —
+that's what actually breaks the incorrect MainActor inference for the closure defined inside it.
+
+### Keyboard lag
+
+Traced to `keyboardWillChangeFrameNotification`, added in round 4 to track keyboard height for
+the reserved-space fix. That notification fires for every frame adjustment (including predictive-
+text-bar height tweaks), not just actual show/hide — each one was re-laying out the entire scroll
+content via the `keyboardHeight`-driven `Color.clear.frame(height:)`. Switched to
+`keyboardWillShowNotification`/`keyboardWillHideNotification`, which fire once per actual
+keyboard transition.
+
+### "Need to tap a note line 3 times to start editing it"
+
+The always-mounted-TextField design (round 2) relies on the TextField's own native tap-to-focus.
+Evidently its hit-testable bounds don't always match the highlighted overlay's visible bounds
+(e.g. once text wraps to a second line), causing taps to miss. Added a `.simultaneousGesture
+(TapGesture())` on the row (not `.onTapGesture`/`.gesture()`, which would exclusively consume the
+tap and break normal cursor-repositioning once already editing) that explicitly sets focus on tap
+when not already editing — guarantees a single tap always works, while leaving in-place cursor
+taps during active editing untouched.
+
+### "Meeting at Greenwood Avenue tomorrow morning" — place and time both wrong
+
+Traced this one carefully before changing anything: the vague-time path ("tomorrow morning" →
+`timeOfDay: "Morning"`, no specific `dueTime`) was already correct per the engine's own logic —
+verified with a new test. The actual gap was place: `placeKeywords` is necessarily a fixed list of
+generic nouns (hospital, office, ...) and can never contain an arbitrary street name. Added a
+second, complementary place-detection layer — `LanguageRules.addressPattern` — that recognizes the
+SHAPE of an address ("at/on <words> <street-type word>" for English, "an/in der
+<word>straße/-allee/-weg/-platz" for German's compound street names) rather than any specific
+name, so it generalizes to any address. Populated for English and German (the user's active
+languages); left unset (defaults to `nil`) for the other 6 as a known, stated gap rather than
+rushing imprecise patterns for languages not being tested.
+
+### Fixed top bar, calendar icon moved there
+
+Added `topBar` as a sibling of the `ScrollView` in the root `VStack` (not inside it) — a fixed
+header only needs to exist as a separate, opaque view sitting in front of the scroll area for the
+"content behind the system status bar" issue to become structurally impossible, since the
+ScrollView's own bounds now start below the header instead of at y=0. Moved the calendar icon from
+the bottom bar into this new top bar per explicit request.
+
+### "Delete the note line once its task is marked complete" (mid-session addition)
+
+`TaskEditView`'s "Mark complete" button now also checks whether every task sharing the same
+`sourceLineID` is complete (a linked multi-step line's other step(s) must finish too) and, if so,
+deletes the `NoteLine` itself — the completed `TaskItem` records are kept (so they still count
+correctly wherever completed-task history matters), only the free-form note row disappears.
+
+**Status:** compiled-but-unverified pending CI; bumped to build 9. This is the mic crash's third
+attempted fix — like round 4's, backed by an actual crash log rather than a guess, but the fact
+that round 4's fix didn't fully solve it (different closure, same bug class) means it's worth
+treating build 9 as still needing real confirmation before calling this closed.

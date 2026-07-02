@@ -93,6 +93,7 @@ struct TaskEditView: View {
                     Button("Mark complete", role: .destructive) {
                         task.isCompleted = true
                         try? modelContext.save()
+                        deleteLineIfAllTasksComplete()
                         dismiss()
                     }
                 }
@@ -108,5 +109,19 @@ struct TaskEditView: View {
                 }
             }
         }
+    }
+
+    // Explicit request: once every task from a note line is done, the line itself disappears
+    // from the notebook rather than sitting there struck through. A "linked" multi-step line's
+    // other step(s) must ALSO be complete first — checked via allSatisfy over every task sharing
+    // the same sourceLineID, not just this one.
+    private func deleteLineIfAllTasksComplete() {
+        guard let lineID = task.sourceLineID else { return }
+        let taskDescriptor = FetchDescriptor<TaskItem>(predicate: #Predicate<TaskItem> { $0.sourceLineID == lineID })
+        guard let siblingTasks = try? modelContext.fetch(taskDescriptor), siblingTasks.allSatisfy(\.isCompleted) else { return }
+        let lineDescriptor = FetchDescriptor<NoteLine>(predicate: #Predicate<NoteLine> { $0.id == lineID })
+        guard let line = try? modelContext.fetch(lineDescriptor).first else { return }
+        modelContext.delete(line)
+        try? modelContext.save()
     }
 }

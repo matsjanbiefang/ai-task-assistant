@@ -41,6 +41,7 @@ struct NoteView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            topBar
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 2) {
@@ -68,14 +69,20 @@ struct NoteView: View {
                 .onChange(of: composeText) { _, _ in
                     proxy.scrollTo("compose", anchor: .bottom)
                 }
-                // keyboardWillChangeFrame fires with the target frame BEFORE the slide animation
-                // starts, so the reserved-space padding above can animate in sync with the
-                // keyboard instead of snapping in afterward.
-                .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
+                // keyboardWillShow/Hide (not keyboardWillChangeFrame — that one also fires for
+                // every predictive-text-bar height tweak, not just actual show/hide, and was
+                // re-laying out the whole scroll content on every one of those, which is almost
+                // certainly what made typing feel laggy) fire once per actual keyboard transition,
+                // with the target frame available before the slide animation starts so the
+                // reserved-space padding can animate in sync with it.
+                .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { notification in
                     guard let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
                     let screenHeight = UIScreen.main.bounds.height
                     let newHeight = max(0, screenHeight - frame.origin.y)
                     withAnimation { keyboardHeight = newHeight }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+                    withAnimation { keyboardHeight = 0 }
                 }
                 // The focus-change scroll runs BEFORE the keyboard finishes its slide-up
                 // animation, so the scrolled-to position can end up covered anyway. keyboardDid-
@@ -159,6 +166,21 @@ struct NoteView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            // Relying solely on the invisible TextField's own native tap-to-focus was reported as
+            // needing several taps to register — its hit-testable bounds evidently don't always
+            // line up with the highlighted overlay's visible bounds (e.g. after text wraps to a
+            // second line). A simultaneous (not exclusive) tap gesture guarantees a single tap
+            // focuses the row, without blocking normal cursor-repositioning taps once already
+            // editing — simultaneousGesture lets both the TextField's own gesture and this one
+            // fire, unlike onTapGesture/gesture() which would swallow the tap exclusively.
+            .simultaneousGesture(
+                TapGesture().onEnded {
+                    if !isEditing {
+                        focusedTarget = .line(line.id)
+                    }
+                }
+            )
 
             Button {
                 let tasksForLine = allTasks.filter { $0.sourceLineID == line.id }
@@ -286,7 +308,30 @@ struct NoteView: View {
         }
     }
 
-    // Amy-style keyboard-docked bar: mic, open-task counts, keyboard dismiss, calendar/tasks.
+    // Fixed header, NOT inside the ScrollView — a sibling of it in the root VStack. Its purpose
+    // is purely structural: since it's a separate, opaque view sitting above the scroll area, the
+    // note content's own top edge can never visually end up "behind" the system status bar/notch
+    // the way it could when the ScrollView's content was allowed to scroll all the way to y=0.
+    // The calendar icon lives here now (moved from the bottom bar) per explicit request.
+    private var topBar: some View {
+        HStack {
+            Text("Notes")
+                .font(.headline)
+            Spacer()
+            Button {
+                showTasks = true
+            } label: {
+                Image(systemName: "calendar")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .background(.bar)
+    }
+
+    // Amy-style keyboard-docked bar: mic, open-task counts, keyboard dismiss.
     // Sits as the last item in the root VStack with no ancestor ignoresSafeArea() — SwiftUI's
     // normal keyboard-avoidance then slides it to sit directly above the keyboard.
     private var bottomBar: some View {
@@ -320,15 +365,6 @@ struct NoteView: View {
                         .foregroundStyle(.secondary)
                         .frame(width: 44, height: 44)
                 }
-            }
-
-            Button {
-                showTasks = true
-            } label: {
-                Image(systemName: "calendar")
-                    .font(.title2)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 44, height: 44)
             }
         }
         .padding(.horizontal, 20)

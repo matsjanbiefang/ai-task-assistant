@@ -70,16 +70,9 @@ final class SpeechRecognizer {
             return
         }
 
-        let inputNode = engine.inputNode
-        let format = inputNode.outputFormat(forBus: 0)
-        // Defensive guard against the crash above regardless of root cause: never install a tap
-        // with a format the engine can't actually use.
-        guard format.sampleRate > 0, format.channelCount > 0 else {
+        guard Self.installTap(on: engine, request: req) else {
             state = .unavailable
             return
-        }
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in
-            req.append(buffer)
         }
 
         do {
@@ -114,6 +107,26 @@ final class SpeechRecognizer {
         }
 
         state = .recording
+    }
+
+    // Confirmed via a second TestFlight crash log (build 8, 2026-07-02): the exact same
+    // dispatch_assert_queue_fail / _swift_task_checkIsolatedSwift crash as requestPermissions()
+    // had, this time in the audio tap's callback. That closure is lexically inside a method of
+    // this @MainActor class, so the compiler infers it as MainActor-isolated — but AVAudioEngine
+    // actually invokes it on its own dedicated realtime audio thread, never the main thread, and
+    // Swift 6's runtime isolation check crashes on the mismatch. Isolating it in a `nonisolated`
+    // static helper (touching only its own parameters, never `self` or any MainActor state) is
+    // what actually breaks the incorrect MainActor inference for the closure defined inside it.
+    nonisolated private static func installTap(on engine: AVAudioEngine, request req: SFSpeechAudioBufferRecognitionRequest) -> Bool {
+        let inputNode = engine.inputNode
+        let format = inputNode.outputFormat(forBus: 0)
+        // Defensive guard against the original crash regardless of root cause: never install a
+        // tap with a format the engine can't actually use.
+        guard format.sampleRate > 0, format.channelCount > 0 else { return false }
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in
+            req.append(buffer)
+        }
+        return true
     }
 
     func stopRecording() {

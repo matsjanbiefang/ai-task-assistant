@@ -242,4 +242,32 @@ struct ExtractionAccuracyTests {
         formatter.dateFormat = "HH:mm"
         #expect(task.dueTime == formatter.string(from: expected))
     }
+
+    // MARK: Feedback round 5 — address/street-name place detection ("Greenwood Avenue" isn't in
+    // any fixed keyword list; recognized by shape — "at/on <words> <street-type word>" — instead).
+
+    @Test
+    func addressStreetNameBecomesPlace() {
+        let service = RuleBasedExtractionService.shared
+        let tasks = service.extractLine("meeting at greenwood avenue tomorrow morning", referenceDate: corpusToday)
+        guard let task = tasks.first else {
+            Issue.record("expected at least one task")
+            return
+        }
+        #expect(task.place == "Greenwood Avenue")
+        #expect(task.dueTime == nil)
+        #expect(task.timeOfDay == "Morning")
+        #expect(task.dueDate == offsetDate(1))
+    }
+
+    @Test
+    func germanCompoundStreetNameBecomesPlace() {
+        let service = RuleBasedExtractionService.shared
+        let tasks = service.extractLine("termin an der bahnhofstraße morgen", referenceDate: corpusToday)
+        guard let task = tasks.first else {
+            Issue.record("expected at least one task")
+            return
+        }
+        #expect(task.place == "Bahnhofstraße")
+    }
 }
