@@ -951,15 +951,6 @@ extension RuleBasedExtractionService {
         // "evening walk"), and stripping them out as if they were a scheduling signal broke
         // exactly that case in the corpus. "noon"/"midday" don't have the same collision risk.
         timeOfDayWords: ["noon": "12:00", "midday": "12:00"],
-        // Anchored to "tomorrow"/"this"/standalone "tonight" specifically so "morning run" is
-        // never touched — only a clear date-relative reference to a period of day counts.
-        vagueTimeOfDayWords: [
-            "tomorrow morning": "Morning", "tomorrow afternoon": "Afternoon",
-            "tomorrow evening": "Evening", "tomorrow night": "Night",
-            "this morning": "Morning", "this afternoon": "Afternoon", "this evening": "Evening",
-            "tonight": "Night",
-        ],
-        laterOffsetWords: ["later"],
         priorityPrefixes: [
             (#"^(urgent|asap|important)\b\#(punctSep)"#, .high),
             (#"^(high priority)\b\#(punctSep)"#, .high),
@@ -1016,7 +1007,16 @@ extension RuleBasedExtractionService {
             // enough to trust for these on its own (see comment on containsVerb below).
             "need", "want", "have", "should", "must", "plan",
         ],
-        verbSuffixes: []
+        verbSuffixes: [],
+        // Anchored to "tomorrow"/"this"/standalone "tonight" specifically so "morning run" is
+        // never touched — only a clear date-relative reference to a period of day counts.
+        vagueTimeOfDayWords: [
+            "tomorrow morning": "Morning", "tomorrow afternoon": "Afternoon",
+            "tomorrow evening": "Evening", "tomorrow night": "Night",
+            "this morning": "Morning", "this afternoon": "Afternoon", "this evening": "Evening",
+            "tonight": "Night",
+        ],
+        laterOffsetWords: ["later"]
     )
 
     private static let germanRules = LanguageRules(
@@ -1040,8 +1040,6 @@ extension RuleBasedExtractionService {
         // "um" is optional — "20.april 12 uhr arzt" states the time without that preposition.
         timePattern: #"\b(?:um\s+)?(\d{1,2})(?:[:.](\d{2}))?\s*uhr\b"#,
         timeOfDayWords: ["mittags": "12:00"],
-        vagueTimeOfDayWords: ["morgens": "Morgens", "vormittags": "Vormittags", "nachmittags": "Nachmittags", "abends": "Abends", "nachts": "Nachts"],
-        laterOffsetWords: ["später"],
         priorityPrefixes: [
             (#"^(dringend|wichtig)\b\#(punctSep)"#, .high),
             (#"^(hohe priorität)\b\#(punctSep)"#, .high),
@@ -1089,7 +1087,9 @@ extension RuleBasedExtractionService {
         conjunctionWords: ["und"],
         sequentialWords: ["dann"],
         imperativeVerbs: [],
-        verbSuffixes: ["en"]
+        verbSuffixes: ["en"],
+        vagueTimeOfDayWords: ["morgens": "Morgens", "vormittags": "Vormittags", "nachmittags": "Nachmittags", "abends": "Abends", "nachts": "Nachts"],
+        laterOffsetWords: ["später"]
     )
 
     private static let frenchRules = LanguageRules(
@@ -1112,8 +1112,6 @@ extension RuleBasedExtractionService {
         nextWeekPattern: #"\bsemaine\s+prochaine\b"#,
         timePattern: #"\bà\s+(\d{1,2})\s*h\s*(\d{2})?\b"#,
         timeOfDayWords: ["midi": "12:00"],
-        vagueTimeOfDayWords: ["matin": "Matin", "après-midi": "Après-midi", "soir": "Soir", "nuit": "Nuit"],
-        laterOffsetWords: ["plus tard"],
         priorityPrefixes: [
             (#"^(urgent|asap|important|importante|priorité haute|haute priorité)\b\#(punctSep)"#, .high),
             (#"^(priorité basse|basse priorité|faible priorité)\b\#(punctSep)"#, .low),
@@ -1155,7 +1153,9 @@ extension RuleBasedExtractionService {
             "ranger", "rendre", "prendre", "penser", "faire", "apporter", "vérifier", "confirmer",
             "soumettre", "commander",
         ],
-        verbSuffixes: []
+        verbSuffixes: [],
+        vagueTimeOfDayWords: ["matin": "Matin", "après-midi": "Après-midi", "soir": "Soir", "nuit": "Nuit"],
+        laterOffsetWords: ["plus tard"]
     )
 
     private static let spanishRules = LanguageRules(
@@ -1180,8 +1180,6 @@ extension RuleBasedExtractionService {
         // "mañana" is already the word for "tomorrow" — the multi-word "por la mañana" form is
         // used here for "in the morning" instead of the bare word, to avoid colliding with it.
         timeOfDayWords: ["mediodía": "12:00"],
-        vagueTimeOfDayWords: ["por la mañana": "Mañana", "por la tarde": "Tarde", "por la noche": "Noche"],
-        laterOffsetWords: ["más tarde"],
         priorityPrefixes: [
             (#"^(urgente|asap|importante|alta prioridad|prioridad alta)\b\#(punctSep)"#, .high),
             (#"^(baja prioridad|prioridad baja)\b\#(punctSep)"#, .low),
@@ -1223,7 +1221,9 @@ extension RuleBasedExtractionService {
             "enviar", "programar", "revisar", "arreglar", "renovar", "cancelar", "regar", "ordenar",
             "devolver", "recoger", "pensar", "hacer", "traer", "comprobar", "confirmar",
         ],
-        verbSuffixes: []
+        verbSuffixes: [],
+        vagueTimeOfDayWords: ["por la mañana": "Mañana", "por la tarde": "Tarde", "por la noche": "Noche"],
+        laterOffsetWords: ["más tarde"]
     )
 
     private static let italianRules = LanguageRules(
@@ -1246,8 +1246,6 @@ extension RuleBasedExtractionService {
         nextWeekPattern: #"\bprossima\s+settimana\b"#,
         timePattern: #"\balle\s+(\d{1,2})(?::(\d{2}))?\b"#,
         timeOfDayWords: ["mezzogiorno": "12:00"],
-        vagueTimeOfDayWords: ["mattina": "Mattina", "pomeriggio": "Pomeriggio", "sera": "Sera", "notte": "Notte"],
-        laterOffsetWords: ["più tardi"],
         priorityPrefixes: [
             (#"^(urgente|asap|importante|alta priorità)\b\#(punctSep)"#, .high),
             (#"^(bassa priorità)\b\#(punctSep)"#, .low),
@@ -1290,7 +1288,9 @@ extension RuleBasedExtractionService {
             "cancellare", "annaffiare", "riordinare", "restituire", "ritirare", "pensare", "fare",
             "portare", "controllare", "confermare",
         ],
-        verbSuffixes: []
+        verbSuffixes: [],
+        vagueTimeOfDayWords: ["mattina": "Mattina", "pomeriggio": "Pomeriggio", "sera": "Sera", "notte": "Notte"],
+        laterOffsetWords: ["più tardi"]
     )
 
     private static let portugueseRules = LanguageRules(
@@ -1313,8 +1313,6 @@ extension RuleBasedExtractionService {
         nextWeekPattern: #"\bpróxima\s+semana\b"#,
         timePattern: #"\bàs\s+(\d{1,2})[h:](\d{2})?\b"#,
         timeOfDayWords: ["meio-dia": "12:00"],
-        vagueTimeOfDayWords: ["manhã": "Manhã", "tarde": "Tarde", "noite": "Noite"],
-        laterOffsetWords: ["mais tarde"],
         priorityPrefixes: [
             (#"^(urgente|asap|importante|alta prioridade)\b\#(punctSep)"#, .high),
             (#"^(baixa prioridade)\b\#(punctSep)"#, .low),
@@ -1356,7 +1354,9 @@ extension RuleBasedExtractionService {
             "enviar", "agendar", "revisar", "consertar", "renovar", "cancelar", "regar", "arrumar",
             "devolver", "buscar", "pensar", "fazer", "trazer", "verificar", "confirmar",
         ],
-        verbSuffixes: []
+        verbSuffixes: [],
+        vagueTimeOfDayWords: ["manhã": "Manhã", "tarde": "Tarde", "noite": "Noite"],
+        laterOffsetWords: ["mais tarde"]
     )
 
     private static let dutchRules = LanguageRules(
@@ -1379,8 +1379,6 @@ extension RuleBasedExtractionService {
         nextWeekPattern: #"\bvolgende\s+week\b"#,
         timePattern: #"\bom\s+(\d{1,2})(?:[:.](\d{2}))?\s*uur\b"#,
         timeOfDayWords: [:],
-        vagueTimeOfDayWords: ["ochtend": "Ochtend", "middag": "Middag", "namiddag": "Namiddag", "avond": "Avond", "nacht": "Nacht"],
-        laterOffsetWords: ["later"],
         priorityPrefixes: [
             (#"^(urgent|asap|belangrijk|hoge prioriteit)\b\#(punctSep)"#, .high),
             (#"^(lage prioriteit)\b\#(punctSep)"#, .low),
@@ -1423,7 +1421,9 @@ extension RuleBasedExtractionService {
             "annuleren", "opruimen", "terugbrengen", "ophalen", "denken", "doen", "brengen",
             "bevestigen",
         ],
-        verbSuffixes: ["en"]
+        verbSuffixes: ["en"],
+        vagueTimeOfDayWords: ["ochtend": "Ochtend", "middag": "Middag", "namiddag": "Namiddag", "avond": "Avond", "nacht": "Nacht"],
+        laterOffsetWords: ["later"]
     )
 
     private static let polishRules = LanguageRules(
@@ -1446,8 +1446,6 @@ extension RuleBasedExtractionService {
         nextWeekPattern: #"\bprzyszłym\s+tygodniu\b"#,
         timePattern: #"\bo\s+godzinie\s+(\d{1,2})(?::(\d{2}))?\b"#,
         timeOfDayWords: ["południe": "12:00"],
-        vagueTimeOfDayWords: ["rano": "Rano", "popołudniu": "Popołudniu", "wieczorem": "Wieczorem", "noc": "Noc"],
-        laterOffsetWords: ["później"],
         priorityPrefixes: [
             (#"^(pilne|asap|ważne|wysoki priorytet)\b\#(punctSep)"#, .high),
             (#"^(niski priorytet)\b\#(punctSep)"#, .low),
@@ -1490,6 +1488,8 @@ extension RuleBasedExtractionService {
             "odnowić", "anulować", "podlać", "zwrócić", "odebrać", "pomyśleć", "zrobić",
             "przynieść", "potwierdzić",
         ],
-        verbSuffixes: ["ć"]
+        verbSuffixes: ["ć"],
+        vagueTimeOfDayWords: ["rano": "Rano", "popołudniu": "Popołudniu", "wieczorem": "Wieczorem", "noc": "Noc"],
+        laterOffsetWords: ["później"]
     )
 }
