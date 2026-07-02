@@ -15,17 +15,19 @@ struct OnboardingLanguageView: View {
 
     var body: some View {
         NavigationStack {
-            List(sortedLanguages) { language in
-                Button {
-                    selected = language
-                } label: {
-                    HStack {
-                        Text(language.displayName)
-                            .foregroundStyle(.primary)
-                        Spacer()
-                        if language == selected {
-                            Image(systemName: "checkmark")
-                                .foregroundStyle(.accentColor)
+            List {
+                ForEach(sortedLanguages) { language in
+                    Button {
+                        selected = language
+                    } label: {
+                        HStack {
+                            Text(language.displayName)
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            if language == selected {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(.accentColor)
+                            }
                         }
                     }
                 }
