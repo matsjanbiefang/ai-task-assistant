@@ -557,3 +557,91 @@ calls for.
 **Next:** Milestone 1 (notes screen redesign, prd-update-01.md §3/§4) is up. The onboarding
 language picker built here becomes the very first screen a new user sees, ahead of the notes
 surface (prd-update-02.md §5).
+
+---
+
+## Milestone 1 — Persistent Per-Line Notes Editor — 2026-07-02
+
+### U1-1/U1-2/U1-5: `NoteLine` model + rewritten `NoteView`
+
+**New file:** `AiTaskAssistant/Models/NoteLine.swift` — `id`, `text`, `order`, `taskCount`,
+`hasLowConfidence`, `createdAt`. The notes surface (§3) needed to become genuinely persistent and
+Apple-Notes-like rather than a single ephemeral `@State` string cleared on submit — each committed
+line is its own `NoteLine` so it can carry its own parse status for the inline icon (U1-3) and so
+`TaskItem` can reference back to it.
+
+**`TaskItem`** gained `sourceLineID: UUID?` (U1-5). Editing a committed line calls `reparse(_:)`,
+which deletes every `TaskItem` where `sourceLineID == line.id` (cancelling their notifications
+first) before inserting fresh ones from a new extraction pass — an edit replaces, never duplicates.
+
+**Rewritten `AiTaskAssistant/Views/NoteView.swift`:** a `@Query(sort: \NoteLine.order)` list of
+committed lines rendered in a `ScrollView`/`LazyVStack`, plus an always-present "compose" row at
+the bottom for the line currently being typed (Notes/Messages-style continuous flow). A single
+`@FocusState private var focusedTarget: FocusTarget?` (`.line(UUID)` or `.compose`) coordinates
+which row is in edit mode — tapping a committed line swaps it from styled `Text` to an editable
+`TextField`; pressing return commits it back.
+
+**Scope decision on "newline / pause" (§3):** only the newline trigger (return key → `.onSubmit`)
+was implemented. Detecting a typing *pause* without pressing return would need a debounced
+per-keystroke timer (Combine or a cancellable `Task` restarted on every character), which is real
+additional complexity for a secondary trigger — the primary flow §3 itself describes ("app opens
+into an active field," type, press return) is fully covered. Flagging as unimplemented rather than
+silently dropping it from the record.
+
+**Removed:** the old submit-button flow and its `onSubmit: () -> Void` closure that auto-advanced
+`ContentView`'s `TabView` to Slide 2 after each save. Per §4/§9 the notes screen is the permanent
+landing screen now — Slide 2 is reached only by the user swiping, never automatically (U1-7).
+
+### U1-3: inline status icon
+
+Amy-pattern icon per committed line, computed once at parse time and stored on `NoteLine` (not
+recomputed per render): orange `questionmark.circle` when any resulting task has
+`dateConfidence < 0.7` (same 0.7 threshold `AssistantView` already used), a count-badge `Text` for
+`taskCount > 1`, or a plain `checkmark.circle` for exactly 1 task.
+
+### U1-4: inline date-phrase highlighting
+
+**New API:** `RuleBasedExtractionService.highlightRanges(in:primaryLanguageCode:) -> [Range<String.Index>]`.
+Deliberately reuses the exact same per-language regex patterns `customDateMatch` matches against
+(refactored the pattern-string construction into `datePatternStrings(for:)`, shared by both) plus
+`NSDataDetector` — so the highlight is never a looser, separately-maintained heuristic that could
+drift out of sync with what the engine actually detects. It finds *all* matches per pattern (not
+just the first, unlike extraction) since every date-looking phrase in a line should be highlighted,
+not just the one that ends up driving `dueDate`.
+
+Rendering: `NoteView.highlightedText(_:)` builds an `NSMutableAttributedString`, applies
+`.foregroundColor` over each highlighted `NSRange`, then bridges to `AttributedString` for
+`Text(_:)`. This is the part of Milestone 1 with the least precedent elsewhere in this codebase
+(no prior attributed-string rendering) — it compiled successfully on the first CI attempt, but
+whether it actually *looks* right (color, contrast, whether overlapping ranges render sanely) has
+not been visually confirmed.
+
+### U1-6/U1-7: `AssistantView` + landing screen
+
+`AssistantView.swift` needed zero changes — it only ever queried `TaskItem` via `@Query`, and
+`TaskItem`'s new `sourceLineID` field doesn't affect any of its existing grouping/display/edit
+logic. `ContentView` now shows `NoteView` unconditionally as tab 0 with no post-save tab-switch
+logic; `AiTaskAssistantApp.swift`'s `.modelContainer` was extended to `[TaskItem.self, NoteLine.self]`.
+
+### CI result
+
+Build succeeded and the extraction accuracy suite stayed at **100% (94/94)** on the first push —
+no compile errors, unlike the multi-language onboarding work earlier in this log. The whole
+`NoteView` rewrite plus the `highlightRanges` addition worked on the first try.
+
+**Honest verification gap:** none of this has been visually or interactively confirmed. CI proves
+it compiles and that extraction accuracy didn't regress — it says nothing about whether focus
+handoff between rows feels right, whether `scrollTo("compose")` actually keeps the compose row
+visible as lines accumulate, whether the attributed-string highlight is visible/legible, or whether
+dictation correctly targets the compose row end-to-end. This needs a real simulator or device pass
+before Milestone 1 is genuinely done, not just "compiles."
+
+**Known pre-existing gap, out of scope for this pass:** `ContentView` has no
+`.onContinueUserActivity` handler wiring Siri's `AddTaskIntent` to `activateDictation` — per the
+original Setup-era log this used to exist, but it's absent from the current `ContentView.swift`
+(likely lost somewhere across the MVP→rules-engine rewrite). `activateDictation` currently has no
+path to ever become `true`. This is Milestone 4's problem (U4-1, not yet started) — noted here so
+it isn't mistaken for something Milestone 1 broke.
+
+**Next:** Milestone 2 (voice input adapted to the notes surface, prd-update-01.md §9) — U2-1/U2-2
+— or, given the verification gap above, a real-device/simulator pass on Milestone 1 first.

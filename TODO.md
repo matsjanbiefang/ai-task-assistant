@@ -65,19 +65,31 @@ per user instead of relying solely on per-line auto-detection.
 
 ## Milestone 1 — Notes Screen + Structured View Redesign
 
-- [ ] **U1-1** Redesign `NoteView` (Slide 1) as a free-form, multi-line notes editor (Apple Notes
-      look/feel) — remove the submit-button ceremony (§3)
-- [ ] **U1-2** Wire per-line live parsing: when a line is completed (newline / pause), parse it
-      immediately via `RuleBasedExtractionService`
-- [ ] **U1-3** Add inline per-line status icon (Amy pattern): "1 task", "N tasks", or a subtle "unsure"
+- [x] **U1-1** Redesign `NoteView` (Slide 1) as a free-form, multi-line notes editor (Apple Notes
+      look/feel) — remove the submit-button ceremony (§3). Lines now persist as `NoteLine` records
+      instead of one ephemeral text field
+- [x] **U1-2** Wire per-line live parsing: when a line is completed (newline / pause), parse it
+      immediately via `RuleBasedExtractionService`. Implemented via return-key commit; debounced
+      "pause without pressing return" detection was not attempted (see IMPLEMENTATION-LOG.md)
+- [x] **U1-3** Add inline per-line status icon (Amy pattern): "1 task", "N tasks", or a subtle "unsure"
       state on low date confidence
-- [ ] **U1-4** Add subtle inline highlighting of detected date phrases within the note text
-- [ ] **U1-5** Update `TaskItem`/persistence so tasks are traceable back to their source line (needed for
-      re-parsing a line on edit without duplicating tasks)
-- [ ] **U1-6** Update `AssistantView` (Slide 2, reached by swipe right): confirm grouping (Today /
-      Upcoming / No date) and tap-to-edit still work against the new save path (§4)
-- [ ] **U1-7** Confirm notes screen (Slide 1) remains the app's landing screen; remove any now-dead
-      code from the old single-field submit flow
+- [x] **U1-4** Add subtle inline highlighting of detected date phrases within the note text —
+      `RuleBasedExtractionService.highlightRanges(in:primaryLanguageCode:)` reuses the same
+      per-language patterns extraction matches against
+- [x] **U1-5** Update `TaskItem`/persistence so tasks are traceable back to their source line (needed for
+      re-parsing a line on edit without duplicating tasks) — `TaskItem.sourceLineID`
+- [x] **U1-6** Update `AssistantView` (Slide 2, reached by swipe right): confirm grouping (Today /
+      Upcoming / No date) and tap-to-edit still work against the new save path (§4) — needed no
+      changes, it only ever queried `TaskItem` directly
+- [x] **U1-7** Confirm notes screen (Slide 1) remains the app's landing screen; remove any now-dead
+      code from the old single-field submit flow — removed the onSubmit-triggers-tab-switch wiring;
+      Slide 2 is now reached only by swiping, never automatically
+
+**Verification gap:** all of Milestone 1 compiled clean and passed the extraction test suite via CI
+(no local Mac/simulator available), but the actual interaction feel — focus handoff between rows,
+scroll-to-compose behavior, attributed-string highlight rendering, dictation targeting the compose
+row — has not been visually/manually verified on a simulator or device. Do the real-device pass
+from `IMPLEMENTATION-LOG.md`'s "Next actions" before considering Milestone 1 truly done.
 
 ## Milestone 2 — Voice Input into Notes Surface
 
