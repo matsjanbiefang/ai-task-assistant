@@ -20,6 +20,10 @@ final class TaskItem {
     var isCompleted: Bool
     var dateConfidence: Double
     var createdAt: Date
+    // U1-5: which NoteLine this task was parsed from, so re-parsing an edited line can replace
+    // its old tasks instead of duplicating them. nil for tasks with no line to trace back to
+    // (shouldn't normally happen post-redesign, but keeps old/imported data from crashing lookups).
+    var sourceLineID: UUID?
 
     init(
         id: UUID = UUID(),
@@ -28,7 +32,8 @@ final class TaskItem {
         dueTime: Date? = nil,
         priority: String? = nil,
         category: String? = nil,
-        dateConfidence: Double = 1.0
+        dateConfidence: Double = 1.0,
+        sourceLineID: UUID? = nil
     ) {
         self.id = id
         self.title = title
@@ -39,5 +44,6 @@ final class TaskItem {
         self.isCompleted = false
         self.dateConfidence = dateConfidence
         self.createdAt = .now
+        self.sourceLineID = sourceLineID
     }
 }

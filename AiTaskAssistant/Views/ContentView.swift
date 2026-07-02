@@ -14,7 +14,7 @@ struct ContentView: View {
             }
         } else {
             TabView(selection: $selectedTab) {
-                NoteView(onSubmit: { selectedTab = 1 }, activateDictation: $activateDictation)
+                NoteView(activateDictation: $activateDictation)
                     .tag(0)
                 AssistantView()
                     .tag(1)
@@ -36,5 +36,5 @@ struct ContentView: View {
 
 #Preview {
     ContentView(deepLinkDestination: .constant(nil))
-        .modelContainer(for: TaskItem.self, inMemory: true)
+        .modelContainer(for: [TaskItem.self, NoteLine.self], inMemory: true)
 }

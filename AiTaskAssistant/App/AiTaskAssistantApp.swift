@@ -13,7 +13,7 @@ struct AiTaskAssistantApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView(deepLinkDestination: $deepLinkDestination)
-                .modelContainer(for: TaskItem.self)
+                .modelContainer(for: [TaskItem.self, NoteLine.self])
                 .onOpenURL { url in
                     handleDeepLink(url)
                 }

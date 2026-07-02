@@ -376,6 +376,66 @@ struct RuleBasedExtractionService: Sendable {
         return TimeMatch(range: range, time: String(format: "%02d:%02d", hour, minute))
     }
 
+    // MARK: - Inline highlight support (§3 — notes-editor visual affordance, not scored)
+
+    // Pattern strings only, no date resolution — deliberately mirrors the rule construction in
+    // `customDateMatch`'s `ruleList`. If a new kind of date rule is added there, add its pattern
+    // here too, or that phrase will parse correctly but stop getting highlighted.
+    private func datePatternStrings(for rules: LanguageRules) -> [String] {
+        func wordAlternation(_ words: [String]) -> String? {
+            guard !words.isEmpty else { return nil }
+            return words.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
+        }
+
+        var patterns: [String] = []
+        if let alt = wordAlternation(rules.dayAfterTomorrowWords) { patterns.append("\\b(\(alt))\\b") }
+        if let alt = wordAlternation(rules.todayWords) { patterns.append("\\b(\(alt))\\b") }
+        if let alt = wordAlternation(rules.tomorrowWords) { patterns.append("\\b(\(alt))\\b") }
+        if let pattern = rules.inDaysPattern { patterns.append(pattern) }
+        if let pattern = rules.inWeeksPattern { patterns.append(pattern) }
+        patterns.append(contentsOf: rules.weekdayPhraseRules.map(\.pattern))
+        if let pattern = rules.nextWeekPattern { patterns.append(pattern) }
+        if let pattern = rules.timePattern { patterns.append(pattern) }
+        return patterns
+    }
+
+    /// Ranges in `line` that look like date/time phrases, for the notes editor's inline highlight
+    /// (§3). Purely a visual affordance — not used for extraction correctness/scoring. Reuses the
+    /// same per-language patterns extraction matches against, plus `NSDataDetector`, so highlights
+    /// stay honest about what the engine actually detects.
+    func highlightRanges(in line: String, primaryLanguageCode: String) -> [Range<String.Index>] {
+        let rulesList = candidateRules(for: line, primaryLanguageCode: primaryLanguageCode)
+        let nsRange = NSRange(line.startIndex..., in: line)
+        var ranges: [Range<String.Index>] = []
+
+        for rules in rulesList {
+            for pattern in datePatternStrings(for: rules) {
+                guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { continue }
+                for match in regex.matches(in: line, range: nsRange) {
+                    if let range = Range(match.range, in: line) { ranges.append(range) }
+                }
+            }
+        }
+        if let detector = Self.dataDetector {
+            for match in detector.matches(in: line, options: [], range: nsRange) {
+                if let range = Range(match.range, in: line) { ranges.append(range) }
+            }
+        }
+        return mergeOverlappingRanges(ranges)
+    }
+
+    private func mergeOverlappingRanges(_ ranges: [Range<String.Index>]) -> [Range<String.Index>] {
+        var merged: [Range<String.Index>] = []
+        for range in ranges.sorted(by: { $0.lowerBound < $1.lowerBound }) {
+            if let last = merged.last, range.lowerBound <= last.upperBound {
+                merged[merged.count - 1] = last.lowerBound..<Swift.max(last.upperBound, range.upperBound)
+            } else {
+                merged.append(range)
+            }
+        }
+        return merged
+    }
+
     // MARK: - Helpers
 
     private func formattedTime(from date: Date) -> String {
