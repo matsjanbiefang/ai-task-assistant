@@ -49,4 +49,10 @@ workflows:
       app_store_connect:
         auth: integration
         submit_to_testflight: true
+        # Internal-only distribution (per explicit request) — without this, Codemagic also
+        # attempts to submit for external beta review, which Apple rejects until Beta App Review
+        # contact info (name/phone/email) is filled in on App Store Connect. "Int" is the exact
+        # name of the existing internal TestFlight group for this app.
+        beta_groups:
+          - Int
         submit_to_app_store: false
