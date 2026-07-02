@@ -44,20 +44,21 @@ per user instead of relying solely on per-line auto-detection.
 
 ## Milestone 0.5 — Multi-Language Architecture + Onboarding + Batch 1 (prd-update-02.md)
 
-- [ ] **L-1** Refactor `RuleBasedExtractionService`'s German-specific rule logic into a data-driven,
+- [x] **L-1** Refactor `RuleBasedExtractionService`'s German-specific rule logic into a data-driven,
       per-language rule table structure (weekdays, relative-date phrases, time-phrase patterns,
       priority/category keywords keyed by language code) so adding a language doesn't mean
       duplicating control flow — German's existing rules become the first table under this structure
-- [ ] **L-2** Add an onboarding screen: pick primary language from the 24 supported, defaulting to
+- [x] **L-2** Add an onboarding screen: pick primary language from the 24 supported, defaulting to
       device locale if supported else English (§3). Store the selection (e.g. `@AppStorage`),
       editable later from settings
-- [ ] **L-3** Wire primary-language-first resolution: try the onboarding-selected language's rules
+- [x] **L-3** Wire primary-language-first resolution: try the onboarding-selected language's rules
       first, fall back to per-line `NLLanguageRecognizer`-detected language's rules, matching §3's
       "ask once, still handle mixed lines" approach
-- [ ] **L-4** Author Batch 1 rule tables: French, Spanish, Italian, Portuguese, Dutch, Polish (§4)
-- [ ] **L-5** Extend the corpus with cases per Batch 1 language and validate via the CI accuracy
-      harness (same loop as U0-8) until each language is in good shape; document results and any
-      known gaps in `IMPLEMENTATION-LOG.md`
+- [x] **L-4** Author Batch 1 rule tables: French, Spanish, Italian, Portuguese, Dutch, Polish (§4)
+- [x] **L-5** Extend the corpus with cases per Batch 1 language and validate via the CI accuracy
+      harness (same loop as U0-8) until each language is in good shape — **100% (94/94)** across all
+      8 languages (en/de/fr/es/it/pt/nl/pl). Not native-speaker verified — see `IMPLEMENTATION-LOG.md`
+      quality-risk note before treating this as launch-ready
 - [ ] **L-6** Flag remaining languages (Swedish, Danish, Finnish, Greek, Czech, Slovak, Hungarian,
       Romanian, Bulgarian, Croatian, Slovenian, Estonian, Latvian, Lithuanian, Maltese, Irish) as
       Milestone 6 follow-up work, not silently shipped unverified

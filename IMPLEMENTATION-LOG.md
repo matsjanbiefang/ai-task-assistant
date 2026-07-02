@@ -515,3 +515,45 @@ these stay valid regardless of what day they're run.
 
 **Status: not yet validated via CI as of this log entry** — about to push and run. Results to
 follow in the next log entry once the pipeline reports back.
+
+### L-1 through L-5: CI validation — five real bugs, then 100% (94/94)
+
+First CI push after the rewrite failed to even build — `OnboardingLanguageView.swift` had three
+separate SwiftUI issues, fixed one real compile error at a time (each needed its own CI round-trip
+since none of this can be checked locally):
+1. `List(sortedLanguages, selection: $selected)` — `selection:` expects `Binding<SelectionValue?>`
+   or `Binding<Set<...>>`, not a plain non-optional `SupportedLanguage`; selection was already
+   handled manually via the row's own `Button`, so the parameter was simply wrong, not needed.
+2. Dropping to `List(sortedLanguages) { ... }` (no selection) hit a *different* overload-resolution
+   error ("cannot convert `[SupportedLanguage]` to `Binding<Data>`") — Swift picked the wrong `List`
+   initializer entirely. Switched to the unambiguous `List { ForEach(sortedLanguages) { ... } }` form.
+3. That produced "the compiler is unable to type-check this expression in reasonable time" — the
+   nested `List`/`ForEach`/`Button`/`HStack`/`if` in one expression was too complex. Extracted the
+   row and the continue button into separate `@ViewBuilder` functions/properties.
+4. `.foregroundStyle(.accentColor)` — `.accentColor` is a `Color` static property, not a member of
+   the `ShapeStyle` protocol `foregroundStyle(_:)` infers (unlike `.primary`, which comes from
+   `HierarchicalShapeStyle`); needed the explicit `Color.accentColor`.
+
+Once it finally built, first accuracy run: **96% (91/94)** — all three failures were the identical
+bug: `urgente:`/`urgente:`/`urgente:` (Spanish/Italian/Portuguese) each produced a title starting
+with a stray `"E: "`. Root cause: English's priority-prefix pattern `^(urgent|asap)` has no word
+boundary after the alternation, and English is always tried first in the candidate list — `urgent`
+matched as a literal prefix of `urgente`, consuming only 6 of its 7 characters and leaving `"e: "`
+behind. Added `\b` after every language's priority-prefix group (all of them, not just English's,
+since the same collision risk exists anywhere one language's prefix word happens to be a literal
+prefix of another's).
+
+**Final: 100% (94/94)** across en/de/fr/es/it/pt/nl/pl — dates 13/13, splitting 15/15, language
+37/37, priority 16/16, ambiguous 5/5, noDate 8/8.
+
+**Honest caveat, restated from prd-update-02.md §4:** this is 100% against a corpus *I* wrote by
+hand for 6 languages I don't have native fluency in, using general knowledge of French/Spanish/
+Italian/Portuguese/Dutch/Polish grammar and vocabulary. It proves the rule tables do what I intended
+them to do — it does not prove that what I intended is actually correct, idiomatic, or complete for
+a native speaker's real note-taking habits. Do not represent these 6 languages as fully
+launch-verified without the native-speaker/professional-translation review pass Milestone 6 (L-8)
+calls for.
+
+**Next:** Milestone 1 (notes screen redesign, prd-update-01.md §3/§4) is up. The onboarding
+language picker built here becomes the very first screen a new user sees, ahead of the notes
+surface (prd-update-02.md §5).
