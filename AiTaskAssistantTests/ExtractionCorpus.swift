@@ -18,19 +18,40 @@ import Foundation
 // a line that stays one task is `[task1]`). The line count in `expected` must equal the number of
 // non-empty lines in `input`.
 //
-// All relative dates below are resolved against `corpusReferenceDate` (2026-07-02, a Thursday).
-// The scoring harness (U0-7, `ExtractionAccuracyTests.swift`) MUST pass this exact date as
-// `referenceDate` — using `.now` would make every relative-date expectation wrong the day after
-// this file is written.
+// IMPORTANT: NSDataDetector (used for English-style dates) has no public API to override its
+// notion of "today" — it always resolves relative to the real device/CI clock, no matter what
+// `referenceDate` the service is called with. So expectations here can't be frozen ISO strings
+// tied to whatever day this file was written on; they're computed from `corpusToday` (the real
+// "now", captured once so every line in one test run agrees on what day it is) via `offsetDate`
+// and `nextWeekdayDate` below. That keeps this a genuinely permanent regression suite instead of
+// one that silently breaks the day after every rewrite.
 
-let corpusReferenceDate: Date = {
-    var components = DateComponents()
-    components.year = 2026
-    components.month = 7
-    components.day = 2
-    components.hour = 9
-    return Calendar.current.date(from: components)!
+let corpusToday: Date = Calendar.current.startOfDay(for: Date())
+
+private let isoFormatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.dateFormat = "yyyy-MM-dd"
+    formatter.timeZone = .current
+    return formatter
 }()
+
+/// ISO date `days` days from `corpusToday` (0 = today, 1 = tomorrow, ...).
+func offsetDate(_ days: Int) -> String {
+    isoFormatter.string(from: Calendar.current.date(byAdding: .day, value: days, to: corpusToday)!)
+}
+
+/// ISO date of the next occurrence of `weekday` (Calendar component: 1 = Sunday ... 7 = Saturday)
+/// from `corpusToday`. `skipToday: true` mirrors "nächsten <weekday>" — if today already is that
+/// weekday, jump a full week ahead instead of returning today.
+func nextWeekdayDate(_ weekday: Int, skipToday: Bool = false) -> String {
+    let calendar = Calendar.current
+    let todayWeekday = calendar.component(.weekday, from: corpusToday)
+    var delta = (weekday - todayWeekday + 7) % 7
+    if delta == 0 && skipToday { delta = 7 }
+    return offsetDate(delta)
+}
+
+private let monday = 2, friday = 6, saturday = 7
 
 struct ExpectedTask: Sendable {
     let title: String
@@ -51,16 +72,10 @@ struct CorpusCase: Sendable {
     let expected: [[ExpectedTask]]
 }
 
-// Reference dates from Thursday 2026-07-02:
-//   today       2026-07-02 (Thu)   tomorrow     2026-07-03 (Fri)
-//   in 2 days   2026-07-04 (Sat)   in 3 days    2026-07-05 (Sun)
-//   next Monday 2026-07-06 (Mon)   next week    2026-07-09 (Thu, +7)
-//   in 2 weeks  2026-07-16 (Thu, +14)
-
 let extractionCorpus: [CorpusCase] = [
     // MARK: Simple lines, clear relative date
     CorpusCase(id: 1, focus: .dates, input: "call max tomorrow", expected: [
-        [ExpectedTask(title: "Call max", dueDate: "2026-07-03", dueTime: nil, priority: nil)],
+        [ExpectedTask(title: "Call max", dueDate: offsetDate(1), dueTime: nil, priority: nil)],
     ]),
     CorpusCase(id: 2, focus: .noDate, input: "milk", expected: [
         [ExpectedTask(title: "Milk", dueDate: nil, dueTime: nil, priority: nil)],
@@ -69,15 +84,15 @@ let extractionCorpus: [CorpusCase] = [
         [ExpectedTask(title: "Buy more coffee beans", dueDate: nil, dueTime: nil, priority: nil)],
     ]),
     CorpusCase(id: 4, focus: .dates, input: "return library books in two days", expected: [
-        [ExpectedTask(title: "Return library books", dueDate: "2026-07-04", dueTime: nil, priority: nil)],
+        [ExpectedTask(title: "Return library books", dueDate: offsetDate(2), dueTime: nil, priority: nil)],
     ]),
     CorpusCase(id: 5, focus: .dates, input: "book the hotel room next week", expected: [
-        [ExpectedTask(title: "Book the hotel room", dueDate: "2026-07-09", dueTime: nil, priority: nil)],
+        [ExpectedTask(title: "Book the hotel room", dueDate: offsetDate(7), dueTime: nil, priority: nil)],
     ]),
 
     // MARK: Priority punctuation (§6)
     CorpusCase(id: 6, focus: .priority, input: "presentation friday!!", expected: [
-        [ExpectedTask(title: "Presentation", dueDate: "2026-07-03", dueTime: nil, priority: .high)],
+        [ExpectedTask(title: "Presentation", dueDate: nextWeekdayDate(friday), dueTime: nil, priority: .high)],
     ]),
     CorpusCase(id: 7, focus: .priority, input: "call the landlord!", expected: [
         [ExpectedTask(title: "Call the landlord", dueDate: nil, dueTime: nil, priority: .high)],
@@ -94,35 +109,35 @@ let extractionCorpus: [CorpusCase] = [
         [ExpectedTask(title: "Gym membership kündigen", dueDate: nil, dueTime: nil, priority: nil)],
     ]),
     CorpusCase(id: 11, focus: .language, input: "zahnarzt anrufen morgen", expected: [
-        [ExpectedTask(title: "Zahnarzt anrufen", dueDate: "2026-07-03", dueTime: nil, priority: nil)],
+        [ExpectedTask(title: "Zahnarzt anrufen", dueDate: offsetDate(1), dueTime: nil, priority: nil)],
     ]),
     CorpusCase(id: 12, focus: .language, input: "wohnung übermorgen putzen", expected: [
-        [ExpectedTask(title: "Wohnung putzen", dueDate: "2026-07-04", dueTime: nil, priority: nil)],
+        [ExpectedTask(title: "Wohnung putzen", dueDate: offsetDate(2), dueTime: nil, priority: nil)],
     ]),
     CorpusCase(id: 13, focus: .language, input: "steuererklärung nächsten montag abgeben", expected: [
-        [ExpectedTask(title: "Steuererklärung abgeben", dueDate: "2026-07-06", dueTime: nil, priority: nil)],
+        [ExpectedTask(title: "Steuererklärung abgeben", dueDate: nextWeekdayDate(monday, skipToday: true), dueTime: nil, priority: nil)],
     ]),
     CorpusCase(id: 14, focus: .language, input: "rechnung bezahlen in 3 tagen", expected: [
-        [ExpectedTask(title: "Rechnung bezahlen", dueDate: "2026-07-05", dueTime: nil, priority: nil)],
+        [ExpectedTask(title: "Rechnung bezahlen", dueDate: offsetDate(3), dueTime: nil, priority: nil)],
     ]),
     CorpusCase(id: 15, focus: .language, input: "termin um 15 uhr", expected: [
         [ExpectedTask(title: "Termin", dueDate: nil, dueTime: "15:00", priority: nil)],
     ]),
     CorpusCase(id: 16, focus: .language, input: "heute noch wäsche waschen", expected: [
-        [ExpectedTask(title: "Noch wäsche waschen", dueDate: "2026-07-02", dueTime: nil, priority: nil)],
+        [ExpectedTask(title: "Noch wäsche waschen", dueDate: offsetDate(0), dueTime: nil, priority: nil)],
     ]),
 
     // MARK: Run-on lines — conjunction splitting (§3)
     CorpusCase(id: 17, focus: .splitting, input: "call max tomorrow and finish deck friday", expected: [
         [
-            ExpectedTask(title: "Call max", dueDate: "2026-07-03", dueTime: nil, priority: nil),
-            ExpectedTask(title: "Finish deck", dueDate: "2026-07-03", dueTime: nil, priority: nil),
+            ExpectedTask(title: "Call max", dueDate: offsetDate(1), dueTime: nil, priority: nil),
+            ExpectedTask(title: "Finish deck", dueDate: nextWeekdayDate(friday), dueTime: nil, priority: nil),
         ],
     ]),
     CorpusCase(id: 18, focus: .splitting, input: "buy milk and call the dentist tomorrow", expected: [
         [
             ExpectedTask(title: "Buy milk", dueDate: nil, dueTime: nil, priority: nil),
-            ExpectedTask(title: "Call the dentist", dueDate: "2026-07-03", dueTime: nil, priority: nil),
+            ExpectedTask(title: "Call the dentist", dueDate: offsetDate(1), dueTime: nil, priority: nil),
         ],
     ]),
     CorpusCase(id: 19, focus: .splitting, input: "deploy the hotfix and write the post-mortem", expected: [
@@ -144,13 +159,13 @@ let extractionCorpus: [CorpusCase] = [
 
     // MARK: Ambiguous fragments (§7)
     CorpusCase(id: 22, focus: .ambiguous, input: "friday", expected: [
-        [ExpectedTask(title: "Friday", dueDate: "2026-07-03", dueTime: nil, priority: nil)],
+        [ExpectedTask(title: "Friday", dueDate: nextWeekdayDate(friday), dueTime: nil, priority: nil)],
     ]),
     CorpusCase(id: 23, focus: .ambiguous, input: "freitag", expected: [
-        [ExpectedTask(title: "Freitag", dueDate: "2026-07-03", dueTime: nil, priority: nil)],
+        [ExpectedTask(title: "Freitag", dueDate: nextWeekdayDate(friday), dueTime: nil, priority: nil)],
     ]),
     CorpusCase(id: 24, focus: .ambiguous, input: "tomorrow", expected: [
-        [ExpectedTask(title: "Tomorrow", dueDate: "2026-07-03", dueTime: nil, priority: nil)],
+        [ExpectedTask(title: "Tomorrow", dueDate: offsetDate(1), dueTime: nil, priority: nil)],
     ]),
 
     // MARK: No-date and vague lines (§7)
@@ -166,10 +181,10 @@ let extractionCorpus: [CorpusCase] = [
 
     // MARK: Explicit time
     CorpusCase(id: 28, focus: .dates, input: "pick up kids at 3pm friday", expected: [
-        [ExpectedTask(title: "Pick up kids", dueDate: "2026-07-03", dueTime: "15:00", priority: nil)],
+        [ExpectedTask(title: "Pick up kids", dueDate: nextWeekdayDate(friday), dueTime: "15:00", priority: nil)],
     ]),
     CorpusCase(id: 29, focus: .dates, input: "team sync at 9:30am tomorrow", expected: [
-        [ExpectedTask(title: "Team sync", dueDate: "2026-07-03", dueTime: "09:30", priority: nil)],
+        [ExpectedTask(title: "Team sync", dueDate: offsetDate(1), dueTime: "09:30", priority: nil)],
     ]),
 
     // MARK: Realistic multi-line notes (mixed categories in one note, per §7's "messy multi-line" framing)
@@ -178,9 +193,9 @@ let extractionCorpus: [CorpusCase] = [
     milk
     presentation friday!!
     """, expected: [
-        [ExpectedTask(title: "Call max", dueDate: "2026-07-03", dueTime: nil, priority: nil)],
+        [ExpectedTask(title: "Call max", dueDate: offsetDate(1), dueTime: nil, priority: nil)],
         [ExpectedTask(title: "Milk", dueDate: nil, dueTime: nil, priority: nil)],
-        [ExpectedTask(title: "Presentation", dueDate: "2026-07-03", dueTime: nil, priority: .high)],
+        [ExpectedTask(title: "Presentation", dueDate: nextWeekdayDate(friday), dueTime: nil, priority: .high)],
     ]),
     CorpusCase(id: 31, focus: .language, input: """
     gym membership kündigen
@@ -188,7 +203,7 @@ let extractionCorpus: [CorpusCase] = [
     buy eggs and bread
     """, expected: [
         [ExpectedTask(title: "Gym membership kündigen", dueDate: nil, dueTime: nil, priority: nil)],
-        [ExpectedTask(title: "Zahnarzt anrufen", dueDate: "2026-07-03", dueTime: nil, priority: nil)],
+        [ExpectedTask(title: "Zahnarzt anrufen", dueDate: offsetDate(1), dueTime: nil, priority: nil)],
         [ExpectedTask(title: "Buy eggs and bread", dueDate: nil, dueTime: nil, priority: nil)],
     ]),
     CorpusCase(id: 32, focus: .splitting, input: """
@@ -198,33 +213,33 @@ let extractionCorpus: [CorpusCase] = [
     """, expected: [
         [ExpectedTask(title: "Fix the login bug before the demo", dueDate: nil, dueTime: nil, priority: .high)],
         [
-            ExpectedTask(title: "Call max", dueDate: "2026-07-03", dueTime: nil, priority: nil),
-            ExpectedTask(title: "Finish deck", dueDate: "2026-07-03", dueTime: nil, priority: nil),
+            ExpectedTask(title: "Call max", dueDate: offsetDate(1), dueTime: nil, priority: nil),
+            ExpectedTask(title: "Finish deck", dueDate: nextWeekdayDate(friday), dueTime: nil, priority: nil),
         ],
-        [ExpectedTask(title: "Friday", dueDate: "2026-07-03", dueTime: nil, priority: nil)],
+        [ExpectedTask(title: "Friday", dueDate: nextWeekdayDate(friday), dueTime: nil, priority: nil)],
     ]),
     CorpusCase(id: 33, focus: .language, input: """
     rechnung bezahlen in 3 tagen
     steuererklärung nächsten montag abgeben
     maybe book flights?
     """, expected: [
-        [ExpectedTask(title: "Rechnung bezahlen", dueDate: "2026-07-05", dueTime: nil, priority: nil)],
-        [ExpectedTask(title: "Steuererklärung abgeben", dueDate: "2026-07-06", dueTime: nil, priority: nil)],
+        [ExpectedTask(title: "Rechnung bezahlen", dueDate: offsetDate(3), dueTime: nil, priority: nil)],
+        [ExpectedTask(title: "Steuererklärung abgeben", dueDate: nextWeekdayDate(monday, skipToday: true), dueTime: nil, priority: nil)],
         [ExpectedTask(title: "Maybe book flights?", dueDate: nil, dueTime: nil, priority: nil)],
     ]),
 
     // MARK: More date-phrase variety, single lines
     CorpusCase(id: 34, focus: .dates, input: "pay the electricity bill in 2 weeks", expected: [
-        [ExpectedTask(title: "Pay the electricity bill", dueDate: "2026-07-16", dueTime: nil, priority: nil)],
+        [ExpectedTask(title: "Pay the electricity bill", dueDate: offsetDate(14), dueTime: nil, priority: nil)],
     ]),
     CorpusCase(id: 35, focus: .dates, input: "morning run tomorrow", expected: [
-        [ExpectedTask(title: "Morning run", dueDate: "2026-07-03", dueTime: nil, priority: nil)],
+        [ExpectedTask(title: "Morning run", dueDate: offsetDate(1), dueTime: nil, priority: nil)],
     ]),
     CorpusCase(id: 36, focus: .language, input: "übermorgen auto abholen", expected: [
-        [ExpectedTask(title: "Auto abholen", dueDate: "2026-07-04", dueTime: nil, priority: nil)],
+        [ExpectedTask(title: "Auto abholen", dueDate: offsetDate(2), dueTime: nil, priority: nil)],
     ]),
     CorpusCase(id: 37, focus: .language, input: "diesen samstag großeinkauf machen", expected: [
-        [ExpectedTask(title: "Großeinkauf machen", dueDate: "2026-07-04", dueTime: nil, priority: nil)],
+        [ExpectedTask(title: "Großeinkauf machen", dueDate: nextWeekdayDate(saturday), dueTime: nil, priority: nil)],
     ]),
     CorpusCase(id: 38, focus: .priority, input: "high priority: renew passport", expected: [
         [ExpectedTask(title: "Renew passport", dueDate: nil, dueTime: nil, priority: .high)],
@@ -233,7 +248,7 @@ let extractionCorpus: [CorpusCase] = [
         [ExpectedTask(title: "Reply to sarah's email", dueDate: nil, dueTime: nil, priority: nil)],
     ]),
     CorpusCase(id: 40, focus: .dates, input: "send the invoice today", expected: [
-        [ExpectedTask(title: "Send the invoice", dueDate: "2026-07-02", dueTime: nil, priority: nil)],
+        [ExpectedTask(title: "Send the invoice", dueDate: offsetDate(0), dueTime: nil, priority: nil)],
     ]),
 
     // MARK: Additional coverage — more samples per category so 90% is a meaningful measurement
@@ -247,10 +262,10 @@ let extractionCorpus: [CorpusCase] = [
         [ExpectedTask(title: "Rechnung bezahlen", dueDate: nil, dueTime: nil, priority: .high)],
     ]),
     CorpusCase(id: 44, focus: .ambiguous, input: "monday", expected: [
-        [ExpectedTask(title: "Monday", dueDate: "2026-07-06", dueTime: nil, priority: nil)],
+        [ExpectedTask(title: "Monday", dueDate: nextWeekdayDate(monday), dueTime: nil, priority: nil)],
     ]),
     CorpusCase(id: 45, focus: .ambiguous, input: "montag", expected: [
-        [ExpectedTask(title: "Montag", dueDate: "2026-07-06", dueTime: nil, priority: nil)],
+        [ExpectedTask(title: "Montag", dueDate: nextWeekdayDate(monday), dueTime: nil, priority: nil)],
     ]),
     CorpusCase(id: 46, focus: .splitting, input: "prepare slides for kickoff and book the conference room", expected: [
         [
@@ -259,7 +274,7 @@ let extractionCorpus: [CorpusCase] = [
         ],
     ]),
     CorpusCase(id: 47, focus: .language, input: "montag steuererklärung abgeben", expected: [
-        [ExpectedTask(title: "Steuererklärung abgeben", dueDate: "2026-07-06", dueTime: nil, priority: nil)],
+        [ExpectedTask(title: "Steuererklärung abgeben", dueDate: nextWeekdayDate(monday), dueTime: nil, priority: nil)],
     ]),
     CorpusCase(id: 48, focus: .dates, input: "clean the car this weekend", expected: [
         [ExpectedTask(title: "Clean the car this weekend", dueDate: nil, dueTime: nil, priority: nil)],
@@ -268,18 +283,18 @@ let extractionCorpus: [CorpusCase] = [
         [ExpectedTask(title: "Oh and also don't forget to water the plants", dueDate: nil, dueTime: nil, priority: nil)],
     ]),
     CorpusCase(id: 50, focus: .dates, input: "renew the gym membership in two days", expected: [
-        [ExpectedTask(title: "Renew the gym membership", dueDate: "2026-07-04", dueTime: nil, priority: nil)],
+        [ExpectedTask(title: "Renew the gym membership", dueDate: offsetDate(2), dueTime: nil, priority: nil)],
     ]),
     CorpusCase(id: 51, focus: .language, input: """
     heute noch wäsche waschen
     diesen samstag großeinkauf machen
     call max tomorrow and finish deck friday
     """, expected: [
-        [ExpectedTask(title: "Noch wäsche waschen", dueDate: "2026-07-02", dueTime: nil, priority: nil)],
-        [ExpectedTask(title: "Großeinkauf machen", dueDate: "2026-07-04", dueTime: nil, priority: nil)],
+        [ExpectedTask(title: "Noch wäsche waschen", dueDate: offsetDate(0), dueTime: nil, priority: nil)],
+        [ExpectedTask(title: "Großeinkauf machen", dueDate: nextWeekdayDate(saturday), dueTime: nil, priority: nil)],
         [
-            ExpectedTask(title: "Call max", dueDate: "2026-07-03", dueTime: nil, priority: nil),
-            ExpectedTask(title: "Finish deck", dueDate: "2026-07-03", dueTime: nil, priority: nil),
+            ExpectedTask(title: "Call max", dueDate: offsetDate(1), dueTime: nil, priority: nil),
+            ExpectedTask(title: "Finish deck", dueDate: nextWeekdayDate(friday), dueTime: nil, priority: nil),
         ],
     ]),
     CorpusCase(id: 52, focus: .priority, input: """

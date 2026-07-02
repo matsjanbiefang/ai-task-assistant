@@ -128,7 +128,24 @@ struct RuleBasedExtractionService: Sendable {
         return [line]
     }
 
+    // NLTagger's POS model is unreliable on 2-3 word context-free imperative fragments ("call
+    // max", "book the conference room") — it tends to default ambiguous words like "book" to
+    // their more common noun sense. A curated imperative-verb list is a much stronger signal at
+    // this length, checked before falling back to NLTagger.
+    private static let englishImperativeVerbs: Set<String> = [
+        "call", "buy", "finish", "deploy", "write", "prepare", "book", "pay", "clean", "reply",
+        "send", "schedule", "review", "fix", "renew", "cancel", "water", "tidy", "return", "pick",
+        "think", "do", "get", "make", "take", "bring", "check", "confirm", "submit", "order",
+        "drop", "pack", "email", "text", "message", "update", "install", "download", "upload",
+    ]
+
     private func containsVerb(_ text: String) -> Bool {
+        let words = text.split(separator: " ").map { $0.lowercased() }
+        if let first = words.first, Self.englishImperativeVerbs.contains(first) { return true }
+        // German task notes are frequently noun-first, infinitive-last ("termin absagen") —
+        // infinitives reliably end in "en", a stronger signal here than generic POS tagging.
+        if let last = words.last, last.count >= 4, last.hasSuffix("en") { return true }
+
         let tagger = NLTagger(tagSchemes: [.lexicalClass])
         tagger.string = text
         var found = false
@@ -203,6 +220,10 @@ struct RuleBasedExtractionService: Sendable {
         let time: String
     }
 
+    // `referenceDate` is intentionally unused here: NSDataDetector has no public API to override
+    // its notion of "today" — it always resolves relative to the real device clock. Callers (and
+    // the test corpus) must treat English relative dates as anchored to the actual current date,
+    // never a frozen historical one. The German rules below, being hand-written, do honor it.
     private func englishDateMatch(in text: String, referenceDate: Date) -> DateMatch? {
         guard let detector = Self.dataDetector else { return nil }
         let nsRange = NSRange(text.startIndex..., in: text)
@@ -347,7 +368,8 @@ struct RuleBasedExtractionService: Sendable {
         cleaned = words.joined(separator: " ")
 
         guard !cleaned.isEmpty else {
-            return fallback.trimmingCharacters(in: .whitespaces)
+            let trimmedFallback = fallback.trimmingCharacters(in: .whitespaces)
+            return trimmedFallback.prefix(1).uppercased() + trimmedFallback.dropFirst()
         }
         return cleaned.prefix(1).uppercased() + cleaned.dropFirst()
     }

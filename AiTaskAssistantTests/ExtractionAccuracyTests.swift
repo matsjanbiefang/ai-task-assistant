@@ -34,7 +34,7 @@ private func scoreCorpus() -> [(caseID: Int, focus: CorpusFocus, lineIndex: Int,
     for testCase in extractionCorpus {
         let lines = nonEmptyLines(testCase.input)
         for (index, line) in lines.enumerated() {
-            let actual = service.extractLine(line, referenceDate: corpusReferenceDate)
+            let actual = service.extractLine(line, referenceDate: corpusToday)
             let expected = index < testCase.expected.count ? testCase.expected[index] : []
             results.append((testCase.id, testCase.focus, index, matches(actual, expected)))
         }
@@ -52,7 +52,7 @@ struct ExtractionAccuracyTests {
 
         for (index, line) in lines.enumerated() {
             guard index < testCase.expected.count else { continue }
-            let actual = service.extractLine(line, referenceDate: corpusReferenceDate)
+            let actual = service.extractLine(line, referenceDate: corpusToday)
             let expected = testCase.expected[index]
             #expect(
                 matches(actual, expected),

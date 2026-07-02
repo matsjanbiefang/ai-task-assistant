@@ -61,11 +61,17 @@ jobs:
 
       # Milestone 0's exit criterion (prd-update-01.md §10) lives in this printed block —
       # surface it directly in the job log instead of relying on the (possibly truncated)
-      # raw xcodebuild output.
+      # raw xcodebuild output. Also pull out individual per-line failures (from the
+      # `corpusCase(_:)` parameterized test) so iterating on the rules doesn't require digging
+      # through the full multi-thousand-line xcodebuild log by hand.
       - name: Show extraction accuracy report
         if: always()
         run: |
+          echo "--- Accuracy summary ---"
           grep -A 20 "Extraction accuracy" test-output.log || echo "No accuracy report found in test-output.log — did the corpus test even run?"
+          echo ""
+          echo "--- Individual case failures ---"
+          grep -B1 "Expectation failed" test-output.log || echo "No individual case failures found."
 
       - name: Upload full test log
         if: always()
