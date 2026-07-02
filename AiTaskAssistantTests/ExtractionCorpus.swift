@@ -487,8 +487,10 @@ let extractionCorpus: [CorpusCase] = [
     // clauses of the appointment, so the title is just the appointment itself. The details
     // string and place/category aren't part of ExpectedTask's scored shape — verified in
     // standalone tests in ExtractionAccuracyTests.swift instead.
+    // Feedback round 4 (further expectation change): "später" now resolves to referenceDate+6h
+    // (see case 85) instead of "today, no time" — corpusToday is midnight, so +6h is 06:00.
     CorpusCase(id: 90, focus: .language, input: "arzttermin später, muss an mein rezept denken und an meine überweisung", expected: [
-        [ExpectedTask(title: "Arzttermin", dueDate: offsetDate(0), dueTime: nil, priority: nil)],
+        [ExpectedTask(title: "Arzttermin", dueDate: offsetDate(0), dueTime: "06:00", priority: nil)],
     ]),
 
     // MARK: Feedback round 3 — filler stripping, head-phrase title reduction, detail clauses
