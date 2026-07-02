@@ -13,18 +13,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # "Xcode_16.app" turned out to resolve to Xcode 16.0 specifically, which lacks the
+      # "iPhone 16" device type on this runner (confirmed via a diagnostic run — see git history
+      # if this needs revisiting). Xcode_16.4.app is confirmed present and has broader simulator
+      # coverage per the runner-images docs.
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_16.app
+        run: sudo xcode-select -s /Applications/Xcode_16.4.app
 
-      # Two failed guesses in a row here (missing simulator destination, then
-      # -downloadPlatform failing with "Unable to connect to simulator") — stop guessing and
-      # print what's actually on the runner before touching the destination again.
-      - name: Diagnose available simulators
+      # Pick whatever iPhone simulator actually exists at runtime instead of hardcoding a device
+      # name/OS pair that can silently stop existing when the runner image changes.
+      - name: Find an available iPhone simulator
+        id: sim
         run: |
-          ls /Applications | grep -i xcode || true
-          xcodebuild -version
-          xcrun simctl list runtimes
-          xcrun simctl list devicetypes | grep -i iphone
+          UDID=$(xcrun simctl list devices available -j \
+            | jq -r '.devices | to_entries[] | .value[] | select(.name | test("iPhone")) | .udid' \
+            | head -1)
+          if [ -z "$UDID" ]; then
+            echo "No available iPhone simulator found:" >&2
+            xcrun simctl list devices available >&2
+            exit 1
+          fi
+          echo "Using simulator $UDID"
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
 
       - name: Build (simulator)
         run: |
@@ -32,7 +42,7 @@ jobs:
           xcodebuild build \
             -project AiTaskAssistant.xcodeproj \
             -scheme AiTaskAssistant \
-            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
             -configuration Debug \
             CODE_SIGNING_ALLOWED=NO \
             | (command -v xcpretty >/dev/null && xcpretty || cat)
@@ -45,7 +55,7 @@ jobs:
           xcodebuild test \
             -project AiTaskAssistant.xcodeproj \
             -scheme AiTaskAssistant \
-            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
             CODE_SIGNING_ALLOWED=NO \
             2>&1 | tee test-output.log
 
