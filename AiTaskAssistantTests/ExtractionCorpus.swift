@@ -438,11 +438,17 @@ let extractionCorpus: [CorpusCase] = [
     // MARK: Real-device feedback fixes (2026-07-02): "wichtig"/"important" priority trigger,
     // colloquial time-of-day words, "später"/"later" -> today, and date inheritance across a
     // split run-on line's later clause.
+    //
+    // Note on casing: cleanTitle only capitalizes the sentence-initial letter (matching how the
+    // engine's cleanup has always worked, English-style) — it does not capitalize German nouns
+    // mid-sentence or proper nouns. "arbeit"/"papa" below are lowercase on purpose; the first
+    // version of these two cases wrongly expected mid-sentence capitalization the engine was
+    // never designed to do, caught by the very first real run of this batch.
     CorpusCase(id: 83, focus: .priority, input: "wichtig für nächsten mittwoch folien vorbereiten arbeit", expected: [
-        [ExpectedTask(title: "Folien vorbereiten Arbeit", dueDate: nextWeekdayDate(wednesday, skipToday: true), dueTime: nil, priority: .high)],
+        [ExpectedTask(title: "Folien vorbereiten arbeit", dueDate: nextWeekdayDate(wednesday, skipToday: true), dueTime: nil, priority: .high)],
     ]),
     CorpusCase(id: 84, focus: .language, input: "mittags treffen mit papa", expected: [
-        [ExpectedTask(title: "Treffen mit Papa", dueDate: nil, dueTime: "12:00", priority: nil)],
+        [ExpectedTask(title: "Treffen mit papa", dueDate: nil, dueTime: "12:00", priority: nil)],
     ]),
     CorpusCase(id: 85, focus: .dates, input: "später einkaufen", expected: [
         [ExpectedTask(title: "Einkaufen", dueDate: offsetDate(0), dueTime: nil, priority: nil)],

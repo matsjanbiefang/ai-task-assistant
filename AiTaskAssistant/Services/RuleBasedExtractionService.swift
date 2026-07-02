@@ -557,7 +557,11 @@ extension RuleBasedExtractionService {
         weekdayPhraseRules: [],
         nextWeekPattern: #"\bnext week\b"#,
         timePattern: nil,
-        timeOfDayWords: ["morning": "08:00", "noon": "12:00", "midday": "12:00", "afternoon": "15:00", "evening": "19:00", "night": "22:00"],
+        // "morning"/"evening"/"night"/"afternoon" deliberately excluded — English commonly uses
+        // them as an ordinary descriptive word in a task title itself ("morning run", "evening
+        // walk"), and stripping them out as if they were a scheduling signal broke exactly that
+        // case in the corpus. "noon"/"midday" don't have the same collision risk.
+        timeOfDayWords: ["noon": "12:00", "midday": "12:00"],
         priorityPrefixes: [
             (#"^(urgent|asap|important)\b\#(punctSep)"#, .high),
             (#"^(high priority)\b\#(punctSep)"#, .high),
