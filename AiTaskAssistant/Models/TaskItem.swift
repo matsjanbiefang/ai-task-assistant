@@ -34,6 +34,9 @@ final class TaskItem {
     // and supplementary details pulled out of the note line ("take my recipes with me").
     var place: String?
     var details: String?
+    // A vague period ("Morning"/"Evening") mentioned without an exact hour — kept separate from
+    // dueTime rather than guessing a specific clock time for it (feedback round 3).
+    var timeOfDay: String?
 
     init(
         id: UUID = UUID(),
@@ -47,7 +50,8 @@ final class TaskItem {
         linkedGroupID: UUID? = nil,
         sequenceIndex: Int? = nil,
         place: String? = nil,
-        details: String? = nil
+        details: String? = nil,
+        timeOfDay: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -63,5 +67,6 @@ final class TaskItem {
         self.sequenceIndex = sequenceIndex
         self.place = place
         self.details = details
+        self.timeOfDay = timeOfDay
     }
 }

@@ -454,20 +454,29 @@ let extractionCorpus: [CorpusCase] = [
     CorpusCase(id: 84, focus: .language, input: "mittags treffen mit papa", expected: [
         [ExpectedTask(title: "Treffen mit papa", dueDate: nil, dueTime: "12:00", priority: nil)],
     ]),
+    // Deliberate expectation change (feedback round 3): "später"/"later" now resolves to a
+    // computed referenceDate+6h answer instead of "today, no time" — corpusToday is midnight, so
+    // +6h lands at 06:00 the same day.
     CorpusCase(id: 85, focus: .dates, input: "später einkaufen", expected: [
-        [ExpectedTask(title: "Einkaufen", dueDate: offsetDate(0), dueTime: nil, priority: nil)],
+        [ExpectedTask(title: "Einkaufen", dueDate: offsetDate(0), dueTime: "06:00", priority: nil)],
     ]),
+    // Deliberate expectation change (feedback round 3): "abends" is a vague multi-hour period,
+    // not a specific instant — it now sets ExtractedTask.timeOfDay ("Abends") instead of guessing
+    // a specific dueTime of 19:00. timeOfDay isn't part of ExpectedTask's scored shape (see the
+    // corpus-level policy comment above) — verified in a standalone test instead.
     CorpusCase(id: 86, focus: .splitting, input: "morgen baumarkt einkaufen und abends zur wohnung streichen", expected: [
         [
             ExpectedTask(title: "Baumarkt einkaufen", dueDate: offsetDate(1), dueTime: nil, priority: nil),
-            ExpectedTask(title: "Wohnung streichen", dueDate: offsetDate(1), dueTime: "19:00", priority: nil),
+            ExpectedTask(title: "Wohnung streichen", dueDate: offsetDate(1), dueTime: nil, priority: nil),
         ],
     ]),
     CorpusCase(id: 87, focus: .priority, input: "important: renew the passport", expected: [
         [ExpectedTask(title: "Renew the passport", dueDate: nil, dueTime: nil, priority: .high)],
     ]),
+    // Deliberate expectation change (feedback round 3): see case 85 — "later" now computes a
+    // specific referenceDate+6h answer.
     CorpusCase(id: 88, focus: .dates, input: "later call the bank", expected: [
-        [ExpectedTask(title: "Call the bank", dueDate: offsetDate(0), dueTime: nil, priority: nil)],
+        [ExpectedTask(title: "Call the bank", dueDate: offsetDate(0), dueTime: "06:00", priority: nil)],
     ]),
     CorpusCase(id: 89, focus: .language, input: "noon call with the client", expected: [
         [ExpectedTask(title: "Call with the client", dueDate: nil, dueTime: "12:00", priority: nil)],
@@ -512,5 +521,12 @@ let extractionCorpus: [CorpusCase] = [
     ]),
     CorpusCase(id: 100, focus: .titles, input: "muszę jutro zapłacić fakturę", expected: [
         [ExpectedTask(title: "Zapłacić fakturę", dueDate: offsetDate(1), dueTime: nil, priority: nil)],
+    ]),
+
+    // Feedback round 3: German time-of-day phrases without "um" ("20.april 12 uhr arzt" — the
+    // time was going unrecognized entirely). Uses an already-working date pattern (nächsten
+    // mittwoch) so this isolates the time-pattern fix specifically.
+    CorpusCase(id: 101, focus: .dates, input: "nächsten mittwoch 12 uhr arzttermin", expected: [
+        [ExpectedTask(title: "Arzttermin", dueDate: nextWeekdayDate(wednesday, skipToday: true), dueTime: "12:00", priority: nil)],
     ]),
 ]

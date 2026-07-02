@@ -42,7 +42,11 @@ final class SpeechRecognizer {
         let engine = AVAudioEngine()
         let req = SFSpeechAudioBufferRecognitionRequest()
         req.shouldReportPartialResults = true
-        req.requiresOnDeviceRecognition = true
+        // Forcing on-device recognition when the current locale's on-device model isn't
+        // downloaded/available (common for non-English locales, e.g. German, unless the user has
+        // specifically downloaded that dictation language) is a plausible source of unpredictable
+        // behavior — fall back to server-based recognition instead of hard-requiring it.
+        req.requiresOnDeviceRecognition = recognizer.supportsOnDeviceRecognition
 
         do {
             let session = AVAudioSession.sharedInstance()

@@ -23,23 +23,40 @@ struct TaskEditView: View {
                 }
 
                 Section("Schedule") {
-                    DatePicker("Due date", selection: Binding(
-                        get: { task.dueDate ?? .now },
-                        set: { task.dueDate = $0 }
-                    ), displayedComponents: .date)
+                    // Pickers only appear once their toggle is on. Showing a DatePicker bound to
+                    // `task.dueDate ?? .now` unconditionally (the previous behavior) displayed the
+                    // actual current wall-clock time as a misleading fallback whenever dueTime was
+                    // genuinely nil — almost certainly what looked like "the app set 8pm" when the
+                    // engine had actually left the time unset, exactly as intended.
                     Toggle("Has due date", isOn: Binding(
                         get: { task.dueDate != nil },
                         set: { if !$0 { task.dueDate = nil } else { task.dueDate = .now } }
                     ))
+                    if task.dueDate != nil {
+                        DatePicker("Due date", selection: Binding(
+                            get: { task.dueDate ?? .now },
+                            set: { task.dueDate = $0 }
+                        ), displayedComponents: .date)
+                    }
 
-                    DatePicker("Due time", selection: Binding(
-                        get: { task.dueTime ?? .now },
-                        set: { task.dueTime = $0 }
-                    ), displayedComponents: .hourAndMinute)
                     Toggle("Has due time", isOn: Binding(
                         get: { task.dueTime != nil },
                         set: { if !$0 { task.dueTime = nil } else { task.dueTime = .now } }
                     ))
+                    if task.dueTime != nil {
+                        DatePicker("Due time", selection: Binding(
+                            get: { task.dueTime ?? .now },
+                            set: { task.dueTime = $0 }
+                        ), displayedComponents: .hourAndMinute)
+                    }
+
+                    if let timeOfDay = task.timeOfDay {
+                        HStack {
+                            Text("Time of day")
+                            Spacer()
+                            Text(timeOfDay).foregroundStyle(.secondary)
+                        }
+                    }
                 }
 
                 if task.linkedGroupID != nil {

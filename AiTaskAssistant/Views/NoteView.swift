@@ -25,6 +25,7 @@ struct NoteView: View {
     @State private var permissionDenied = false
     @State private var speech = SpeechRecognizer()
     @State private var editTask: TaskItem?
+    @State private var keyboardHeight: CGFloat = 0
     @FocusState private var focusedTarget: FocusTarget?
 
     private let extraction = RuleBasedExtractionService.shared
@@ -48,6 +49,12 @@ struct NoteView: View {
                         }
                         composeRow
                             .id("compose")
+                        // Reserves scrollable room below the last row equal to the keyboard's
+                        // own height. This is a deliberate belt-and-suspenders fix: even if a
+                        // scrollTo call above lands slightly early/late relative to the keyboard's
+                        // slide animation, there's always enough space to scroll the active row
+                        // fully clear of the keyboard rather than partially behind it.
+                        Color.clear.frame(height: keyboardHeight)
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 24)
@@ -60,6 +67,15 @@ struct NoteView: View {
                 // focus-change scroll below never fires — scroll on the text itself growing.
                 .onChange(of: composeText) { _, _ in
                     proxy.scrollTo("compose", anchor: .bottom)
+                }
+                // keyboardWillChangeFrame fires with the target frame BEFORE the slide animation
+                // starts, so the reserved-space padding above can animate in sync with the
+                // keyboard instead of snapping in afterward.
+                .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
+                    guard let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
+                    let screenHeight = UIScreen.main.bounds.height
+                    let newHeight = max(0, screenHeight - frame.origin.y)
+                    withAnimation { keyboardHeight = newHeight }
                 }
                 // The focus-change scroll runs BEFORE the keyboard finishes its slide-up
                 // animation, so the scrolled-to position can end up covered anyway. keyboardDid-
@@ -82,6 +98,7 @@ struct NoteView: View {
         }
         .background(Color(.systemBackground))
         .onAppear { focusedTarget = .compose }
+        .onDisappear { speech.stopRecording() }
         .onChange(of: activateDictation) { _, active in
             if active {
                 activateDictation = false
@@ -123,7 +140,7 @@ struct NoteView: View {
         return HStack(alignment: .top, spacing: 8) {
             ZStack(alignment: .topLeading) {
                 TextField("", text: editingTextBinding(for: line), axis: .vertical)
-                    .font(.title3)
+                    .font(.body)
                     .lineLimit(1...6)
                     .focused($focusedTarget, equals: .line(line.id))
                     .foregroundStyle(isEditing ? Color.primary : Color.clear)
@@ -137,7 +154,7 @@ struct NoteView: View {
 
                 if !isEditing {
                     highlightedText(line.text, struckThrough: isLineCompleted(line))
-                        .font(.title3)
+                        .font(.body)
                         .allowsHitTesting(false)
                 }
             }
@@ -163,7 +180,7 @@ struct NoteView: View {
 
     private var composeRow: some View {
         TextField("What do you need to do?", text: $composeText, axis: .vertical)
-            .font(.title3)
+            .font(.body)
             .lineLimit(1...6)
             .focused($focusedTarget, equals: .compose)
             .submitLabel(.done)
@@ -220,7 +237,7 @@ struct NoteView: View {
                 .font(.caption2)
                 .foregroundStyle(.orange)
         } else if !tasksForLine.isEmpty {
-            let hasTime = tasksForLine.contains { $0.dueTime != nil }
+            let hasTime = tasksForLine.contains { $0.dueTime != nil || $0.timeOfDay != nil }
             let hasPlace = tasksForLine.contains { $0.place != nil }
             HStack(spacing: 3) {
                 Image(systemName: hasTime ? "clock" : "clock.badge.xmark")
@@ -401,7 +418,8 @@ struct NoteView: View {
                 linkedGroupID: task.groupID,
                 sequenceIndex: task.sequenceIndex,
                 place: task.place,
-                details: task.details
+                details: task.details,
+                timeOfDay: task.timeOfDay
             )
             modelContext.insert(item)
             if let date = item.dueDate, date > .now {

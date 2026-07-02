@@ -183,4 +183,62 @@ struct ExtractionAccuracyTests {
         #expect(tasks[0].title == "Buy eggs and bread")
         #expect(tasks[0].details == nil)
     }
+
+    // MARK: Feedback round 3 — vague time-of-day and "later" offset. timeOfDay isn't part of
+    // ExpectedTask's scored shape (dueTime specifically staying nil for vague words IS scored,
+    // via the corpus cases above), so the qualitative label itself is checked here directly.
+
+    @Test
+    func vagueTimeOfDaySetsLabelNotDueTime() {
+        let service = RuleBasedExtractionService.shared
+        let tasks = service.extractLine("shopping tomorrow morning", referenceDate: corpusToday)
+        guard let task = tasks.first else {
+            Issue.record("expected at least one task")
+            return
+        }
+        #expect(task.dueTime == nil)
+        #expect(task.timeOfDay == "Morning")
+        #expect(task.dueDate == offsetDate(1))
+    }
+
+    @Test
+    func vagueTimeOfDayDoesNotCollideWithOrdinaryTitleUse() {
+        // The exact regression this test guards: bare "morning" as an ordinary word in a title
+        // ("morning run") must NOT be treated as a time signal — only date-anchored phrasing
+        // ("tomorrow morning") should be.
+        let service = RuleBasedExtractionService.shared
+        let tasks = service.extractLine("morning run tomorrow", referenceDate: corpusToday)
+        guard let task = tasks.first else {
+            Issue.record("expected at least one task")
+            return
+        }
+        #expect(task.title == "Morning run")
+        #expect(task.timeOfDay == nil)
+    }
+
+    @Test
+    func germanVagueTimeOfDaySetsLabel() {
+        let service = RuleBasedExtractionService.shared
+        let tasks = service.extractLine("morgen baumarkt einkaufen und abends zur wohnung streichen", referenceDate: corpusToday)
+        guard tasks.count == 2 else {
+            Issue.record("expected 2 tasks, got \(tasks.count): \(tasks)")
+            return
+        }
+        #expect(tasks[1].dueTime == nil)
+        #expect(tasks[1].timeOfDay == "Abends")
+    }
+
+    @Test
+    func laterResolvesToSixHourOffset() {
+        let service = RuleBasedExtractionService.shared
+        let tasks = service.extractLine("later call the bank", referenceDate: corpusToday)
+        guard let task = tasks.first else {
+            Issue.record("expected at least one task")
+            return
+        }
+        let expected = corpusToday.addingTimeInterval(6 * 3600)
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        #expect(task.dueTime == formatter.string(from: expected))
+    }
 }

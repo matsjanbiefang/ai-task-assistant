@@ -948,3 +948,93 @@ phrasing.
 
 **Status:** compiled-but-unverified pending CI; bumped to build 7. Mic crash STILL open, pending
 the user's crash log.
+
+---
+
+## Real-Device Feedback Round 4 — 2026-07-02
+
+Fourth round, testing build 7. Five items.
+
+### Keyboard still covering the note when typing at the bottom (third attempt)
+
+**File:** `AiTaskAssistant/Views/NoteView.swift`. Round 3's fix (scroll on focus-change + on
+composeText-change + on keyboardDidShow) apparently still wasn't reliable. Added a third,
+independent layer as defense-in-depth: track the keyboard's actual height via
+`keyboardWillChangeFrameNotification` (fires with the target frame BEFORE the slide animation
+starts, so it can animate in sync) and reserve that much empty space at the bottom of the
+ScrollView's content (`Color.clear.frame(height: keyboardHeight)`). This means even if a
+`scrollTo` call ever lands slightly early or late relative to the keyboard's own animation, there
+is always enough scrollable room to bring the active row fully clear of the keyboard rather than
+partially behind it — the fix no longer depends on scroll-timing precision at all.
+
+### Mic crash (still open, no log yet)
+
+Checked App Store Connect's TestFlight crash-feedback page directly — empty, so TestFlight isn't
+capturing it automatically either; still need the user's on-device crash log for a real diagnosis.
+Applied one more plausible defensive fix in the meantime: `requiresOnDeviceRecognition` was
+unconditionally `true`, which is a plausible crash source for locales (e.g. German) whose
+on-device dictation model isn't downloaded — changed to `recognizer.supportsOnDeviceRecognition`.
+Also added `.onDisappear { speech.stopRecording() }` to `NoteView` for hygiene (leaving the screen
+mid-recording previously left the engine/tap dangling). Neither is confirmed as THE fix — status
+communicated to the user as still open.
+
+### German time recognition: "20.April 12 Uhr Arzt" — bare "Uhr" without "um"
+
+**File:** `RuleBasedExtractionService.swift`. German's `timePattern` required the preposition "um"
+(`um 15 uhr`), but time is very commonly stated without it. Made "um" optional:
+`\b(?:um\s+)?(\d{1,2})(?:[:.](\d{2}))?\s*uhr\b`.
+
+### Font size
+
+`NoteView`'s line/compose text was `.title3` — dropped to `.body` per direct request.
+
+### "shopping tomorrow morning" → 8pm the next day
+
+Traced this carefully before touching anything: the extraction engine's own `hasTimeHint` guard
+in `englishTimeString` already requires explicit digits in NSDataDetector's matched text, and
+English's `timeOfDayWords` never included "morning" (excluded since round 1 specifically to avoid
+the "morning run" collision) — so `dueTime` was already correctly `nil` for this exact input, on
+both the pre-round-3 and round-3 engine. The far more likely actual cause, found on inspection:
+`TaskEditView`'s "Due time" `DatePicker` was bound to `task.dueTime ?? .now` and rendered
+**unconditionally**, regardless of the "Has due time" toggle — so whenever `dueTime` was genuinely
+nil, the picker displayed the actual current wall-clock time as a silent fallback. Testing in the
+evening would show something like "8:00 PM" for a task with no time at all, which matches the
+report exactly. Fixed by hiding both the due-date and due-time `DatePicker`s behind their
+respective toggles instead of always rendering them.
+
+Independently of that fix, the user also asked for the underlying behavior they expected: vague
+periods ("in the morning") should set a qualitative label, never a guessed specific hour, and
+"later" should compute something specific rather than nothing. Implemented both as genuine engine
+features (not just the bug fix):
+
+- **New `LanguageRules.vagueTimeOfDayWords`** (word/phrase -> display label, e.g. German
+  "abends" -> "Abends") and **`ExtractedTask`/`TaskItem.timeOfDay: String?`**. Matched the same
+  way as the existing precise `timeOfDayWords`, but sets only the label, never `dueTime`. Each
+  language's previous `timeOfDayWords` was split: genuinely unambiguous single-hour concepts
+  (noon/midday/mittags/mediodía/mezzogiorno/meio-dia/południe) stayed precise; the rest
+  (morning/afternoon/evening/night and their translations) moved to vague.
+- **English needed a different, context-anchored approach**, not a bare word list: bare
+  "morning"/"evening"/etc. reintroduce the exact "morning run" collision round 1 fixed. Used
+  multi-word phrase keys instead ("tomorrow morning", "this evening", "tonight" -> label) so only
+  a clear date-relative reference counts, never a bare descriptive word in the title itself.
+  Verified the non-collision explicitly in a new test (`vagueTimeOfDayDoesNotCollideWithOrdinary
+  TitleUse`, using the exact "morning run tomorrow" corpus phrasing).
+- **Found and fixed a related range-overlap bug while wiring this in**: a context-anchored match
+  like "tomorrow morning" and the date-matcher's own shorter "tomorrow" match start at the same
+  point but have different lengths; `removeRanges`' overlap resolution picked whichever range
+  happened to be appended first, which could leave "morning" sitting in the title uncleaned.
+  Fixed by sorting equal-start ranges longest-first, so the more complete phrase always wins.
+- **New `LanguageRules.laterOffsetWords`** ("later"/"später"/"plus tard"/...), removed from each
+  language's `todayWords` (where they previously just flagged "today, no time") and given a
+  dedicated `laterOffsetMatch`: resolves to `referenceDate + 6 hours`, deriving both date and time
+  from that computed instant (so it naturally rolls over to the next calendar day if 6 hours from
+  now crosses midnight, rather than needing separate day-rollover logic).
+- `TaskEditView` and `AssistantView` both gained a "Time of day" display for the new field.
+
+Corpus: cases 85/88 ("später"/"later") now expect a computed dueTime rather than nil (documented
+as a deliberate change); case 86 ("abends") now expects nil dueTime instead of "19:00" (vague, not
+precise — also documented); new case 101 for the bare-"Uhr" fix. Four new standalone tests for the
+vague-time/later-offset behavior, including the explicit non-collision regression check.
+
+**Status:** compiled-but-unverified pending CI; bumped to build 8. Mic crash remains the one
+open item with genuinely no confirmed root cause.

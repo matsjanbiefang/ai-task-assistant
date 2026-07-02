@@ -84,6 +84,10 @@ struct AssistantView: View {
                         Text(time.formatted(.dateTime.hour().minute()))
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                    } else if let timeOfDay = task.timeOfDay {
+                        Label(timeOfDay, systemImage: "clock")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
                     }
                     if let place = task.place {
                         Label(place, systemImage: "mappin.and.ellipse")
