@@ -15,7 +15,7 @@ struct OnboardingLanguageView: View {
 
     var body: some View {
         NavigationStack {
-            List(sortedLanguages, selection: $selected) { language in
+            List(sortedLanguages) { language in
                 Button {
                     selected = language
                 } label: {
