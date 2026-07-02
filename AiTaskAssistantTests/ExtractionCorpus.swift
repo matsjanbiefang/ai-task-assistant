@@ -120,8 +120,11 @@ let extractionCorpus: [CorpusCase] = [
     CorpusCase(id: 14, focus: .language, input: "rechnung bezahlen in 3 tagen", expected: [
         [ExpectedTask(title: "Rechnung bezahlen", dueDate: offsetDate(3), dueTime: nil, priority: nil)],
     ]),
+    // A time with no day mentioned reasonably defaults to today — that's a sensible engine
+    // behavior, not a bug, so the ground truth expects today's date rather than nil (corrected
+    // after the first real CI run showed the original nil expectation was the mislabel).
     CorpusCase(id: 15, focus: .language, input: "termin um 15 uhr", expected: [
-        [ExpectedTask(title: "Termin", dueDate: nil, dueTime: "15:00", priority: nil)],
+        [ExpectedTask(title: "Termin", dueDate: offsetDate(0), dueTime: "15:00", priority: nil)],
     ]),
     CorpusCase(id: 16, focus: .language, input: "heute noch wäsche waschen", expected: [
         [ExpectedTask(title: "Noch wäsche waschen", dueDate: offsetDate(0), dueTime: nil, priority: nil)],

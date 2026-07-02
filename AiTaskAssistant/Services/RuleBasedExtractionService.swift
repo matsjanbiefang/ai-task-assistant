@@ -77,7 +77,9 @@ struct RuleBasedExtractionService: Sendable {
             return true
         }
         func tryEnglish() -> Bool {
-            guard let match = englishDateMatch(in: text, referenceDate: referenceDate) else { return false }
+            let match = englishDateMatch(in: text, referenceDate: referenceDate)
+                ?? englishCustomDateMatch(in: text, referenceDate: referenceDate)
+            guard let match else { return false }
             dueDate = isoDate(match.date)
             dueTime = match.time
             confidence = match.confidence
@@ -245,6 +247,53 @@ struct RuleBasedExtractionService: Sendable {
             || matchedText.range(of: #"\b\d{1,2}:\d{2}\b"#, options: .regularExpression) != nil
         guard hasTimeHint else { return nil }
         return formattedTime(from: date)
+    }
+
+    private static let englishNumberWords: [String: Int] = [
+        "a": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+        "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+    ]
+
+    // Confirmed via the Milestone 0 corpus run: NSDataDetector doesn't parse "next week" at all,
+    // and only handles "in N days/weeks" when N is a numeral, not spelled out ("in two days").
+    // These gaps get a small hand-written fallback, same approach as the German rules, and (unlike
+    // NSDataDetector) these do honor `referenceDate`.
+    private func englishCustomDateMatch(in text: String, referenceDate: Date) -> DateMatch? {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: referenceDate)
+        let number = "(\\d+|" + Self.englishNumberWords.keys.joined(separator: "|") + ")"
+
+        struct Rule {
+            let pattern: String
+            let confidence: Double
+            let resolve: (NSTextCheckingResult, String) -> Date
+        }
+
+        func count(_ match: NSTextCheckingResult, _ source: String) -> Int {
+            let raw = (source as NSString).substring(with: match.range(at: 1)).lowercased()
+            return Int(raw) ?? Self.englishNumberWords[raw] ?? 1
+        }
+
+        let rules: [Rule] = [
+            Rule(pattern: #"\bnext week\b"#, confidence: 0.85) { _, _ in
+                calendar.date(byAdding: .day, value: 7, to: today)!
+            },
+            Rule(pattern: "\\bin\\s+\(number)\\s+days?\\b", confidence: 0.85) { match, source in
+                calendar.date(byAdding: .day, value: count(match, source), to: today)!
+            },
+            Rule(pattern: "\\bin\\s+\(number)\\s+weeks?\\b", confidence: 0.85) { match, source in
+                calendar.date(byAdding: .day, value: count(match, source) * 7, to: today)!
+            },
+        ]
+
+        let nsRange = NSRange(text.startIndex..., in: text)
+        for rule in rules {
+            guard let regex = try? NSRegularExpression(pattern: rule.pattern, options: [.caseInsensitive]),
+                  let match = regex.firstMatch(in: text, range: nsRange),
+                  let range = Range(match.range, in: text) else { continue }
+            return DateMatch(range: range, date: rule.resolve(match, text), time: nil, confidence: rule.confidence)
+        }
+        return nil
     }
 
     private static let germanWeekdays: [String: Int] = [
