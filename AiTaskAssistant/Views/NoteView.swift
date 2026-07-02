@@ -4,14 +4,20 @@ import UIKit
 
 // prd-update-01.md §3: free-form, persistent, Apple-Notes-style multi-line surface. Each committed
 // line is a `NoteLine`; pressing return (or tapping away from an edited line) commits/re-parses it
-// immediately — no submit-button ceremony. §4/§9: this stays the app's landing screen; Slide 2 is
-// reached by swiping, not by an automatic post-submit jump (U1-7 removed that old transition).
+// immediately — no submit-button ceremony. §4/§9: this stays the app's landing screen.
+//
+// User feedback (2026-07-02) folded in: word-wrapping lines instead of horizontal shift, a
+// keyboard-docked bottom bar (mic / open task counts / dismiss keyboard / calendar), tapping a
+// line's status icon jumps to the tasks sheet instead of only editing text, and completed tasks
+// show struck through in place.
 struct NoteView: View {
     @Binding var activateDictation: Bool
+    @Binding var showTasks: Bool
 
     @Environment(\.modelContext) private var modelContext
     @AppStorage("primaryLanguageCode") private var primaryLanguageCode = "en"
     @Query(sort: \NoteLine.order) private var lines: [NoteLine]
+    @Query private var allTasks: [TaskItem]
 
     @State private var editingTexts: [UUID: String] = [:]
     @State private var composeText = ""
@@ -27,30 +33,30 @@ struct NoteView: View {
     }
 
     private var isRecording: Bool { speech.state == .recording }
+    private var openTasks: [TaskItem] { allTasks.filter { !$0.isCompleted } }
+    private var todayOpenCount: Int { openTasks.filter { isToday($0.dueDate) }.count }
 
     var body: some View {
-        ZStack {
-            Color(.systemBackground).ignoresSafeArea()
-            VStack(spacing: 0) {
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 2) {
-                            ForEach(lines) { line in
-                                row(for: line)
-                            }
-                            composeRow
-                                .id("compose")
+        VStack(spacing: 0) {
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 2) {
+                        ForEach(lines) { line in
+                            row(for: line)
                         }
-                        .padding(.horizontal, 20)
-                        .padding(.top, 24)
+                        composeRow
+                            .id("compose")
                     }
-                    .onChange(of: lines.count) { _, _ in
-                        withAnimation { proxy.scrollTo("compose", anchor: .bottom) }
-                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 24)
                 }
-                micBar
+                .onChange(of: lines.count) { _, _ in
+                    withAnimation { proxy.scrollTo("compose", anchor: .bottom) }
+                }
             }
+            bottomBar
         }
+        .background(Color(.systemBackground))
         .onAppear { focusedTarget = .compose }
         .onChange(of: activateDictation) { _, active in
             if active {
@@ -61,6 +67,11 @@ struct NoteView: View {
         .onChange(of: speech.transcript) { _, new in
             if isRecording { composeText = new }
         }
+        .sheet(isPresented: $showTasks) {
+            AssistantView()
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
     }
 
     // MARK: - Rows
@@ -68,39 +79,62 @@ struct NoteView: View {
     @ViewBuilder
     private func row(for line: NoteLine) -> some View {
         if focusedTarget == .line(line.id) {
-            TextField("", text: editingTextBinding(for: line))
+            TextField("", text: editingTextBinding(for: line), axis: .vertical)
                 .font(.title3)
+                .lineLimit(1...6)
                 .focused($focusedTarget, equals: .line(line.id))
                 .submitLabel(.done)
                 .onSubmit {
-                    Task { await commitLine(line, text: editingTexts[line.id] ?? line.text) }
+                    Task { await commitLine(line) }
+                }
+                .onChange(of: editingTexts[line.id]) { _, newValue in
+                    guard let newValue, newValue.contains("\n") else { return }
+                    editingTexts[line.id] = newValue.replacingOccurrences(of: "\n", with: "")
+                    Task { await commitLine(line) }
                 }
                 .padding(.vertical, 4)
         } else {
             HStack(alignment: .top, spacing: 8) {
                 Button {
                     editingTexts[line.id] = line.text
-                    focusedTarget = .line(line.id)
+                    // Setting focus in the same tick the row swaps from Text to TextField can be
+                    // dropped by SwiftUI — the TextField isn't in the view tree yet at the moment
+                    // focusedTarget changes. Deferring one runloop tick makes it reliable.
+                    DispatchQueue.main.async {
+                        focusedTarget = .line(line.id)
+                    }
                 } label: {
-                    highlightedText(line.text)
+                    highlightedText(line.text, struckThrough: isLineCompleted(line))
                         .font(.title3)
                         .foregroundStyle(.primary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .buttonStyle(.plain)
-                statusIcon(for: line)
-                    .padding(.top, 4)
+
+                Button {
+                    showTasks = true
+                } label: {
+                    statusIcon(for: line)
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 4)
             }
             .padding(.vertical, 4)
         }
     }
 
     private var composeRow: some View {
-        TextField("What do you need to do?", text: $composeText)
+        TextField("What do you need to do?", text: $composeText, axis: .vertical)
             .font(.title3)
+            .lineLimit(1...6)
             .focused($focusedTarget, equals: .compose)
             .submitLabel(.done)
             .onSubmit {
+                Task { await commitCompose() }
+            }
+            .onChange(of: composeText) { _, newValue in
+                guard newValue.contains("\n") else { return }
+                composeText = newValue.replacingOccurrences(of: "\n", with: "")
                 Task { await commitCompose() }
             }
             .padding(.vertical, 4)
@@ -115,18 +149,28 @@ struct NoteView: View {
 
     // §3: subtle inline highlight on detected date phrases, like Notes/Mail link detection —
     // purely visual, computed fresh from the same rules the extraction engine matches against.
-    private func highlightedText(_ text: String) -> Text {
+    // Completed lines (every task from this line marked done) render struck through.
+    private func highlightedText(_ text: String, struckThrough: Bool) -> Text {
         let ranges = extraction.highlightRanges(in: text, primaryLanguageCode: primaryLanguageCode)
-        guard !ranges.isEmpty else { return Text(text) }
         let mutable = NSMutableAttributedString(string: text)
         for range in ranges {
             mutable.addAttribute(.foregroundColor, value: UIColor.systemBlue, range: NSRange(range, in: text))
         }
+        if struckThrough {
+            let fullRange = NSRange(location: 0, length: (text as NSString).length)
+            mutable.addAttribute(.strikethroughStyle, value: NSUnderlineStyle.single.rawValue, range: fullRange)
+            mutable.addAttribute(.foregroundColor, value: UIColor.secondaryLabel, range: fullRange)
+        }
         return Text(AttributedString(mutable))
     }
 
-    // §3: Amy-pattern inline status icon — "1 task" (checkmark), "N tasks" (count badge), or a
-    // subtle "unsure" state when any resulting task has low date confidence.
+    private func isLineCompleted(_ line: NoteLine) -> Bool {
+        let tasksForLine = allTasks.filter { $0.sourceLineID == line.id }
+        guard !tasksForLine.isEmpty else { return false }
+        return tasksForLine.allSatisfy(\.isCompleted)
+    }
+
+    // §3: Amy-pattern inline status icon — tapping it jumps to the tasks sheet (user feedback).
     @ViewBuilder
     private func statusIcon(for line: NoteLine) -> some View {
         if line.hasLowConfidence {
@@ -144,8 +188,11 @@ struct NoteView: View {
         }
     }
 
-    private var micBar: some View {
-        HStack {
+    // Amy-style keyboard-docked bar: mic, open-task counts, keyboard dismiss, calendar/tasks.
+    // Sits as the last item in the root VStack with no ancestor ignoresSafeArea() — SwiftUI's
+    // normal keyboard-avoidance then slides it to sit directly above the keyboard.
+    private var bottomBar: some View {
+        HStack(spacing: 16) {
             Button {
                 Task { await toggleRecording() }
             } label: {
@@ -155,16 +202,59 @@ struct NoteView: View {
                     .frame(width: 44, height: 44)
                     .contentTransition(.symbolEffect(.replace))
             }
-            Spacer()
+
+            taskCountsPill
+
             if permissionDenied {
-                Text("Microphone or speech access denied. Enable in Settings.")
+                Text("Mic access denied")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.trailing)
+            }
+
+            Spacer()
+
+            if focusedTarget != nil {
+                Button {
+                    focusedTarget = nil
+                } label: {
+                    Image(systemName: "keyboard.chevron.compact.down")
+                        .font(.title2)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 44, height: 44)
+                }
+            }
+
+            Button {
+                showTasks = true
+            } label: {
+                Image(systemName: "calendar")
+                    .font(.title2)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 44, height: 44)
             }
         }
-        .padding(.horizontal, 24)
-        .padding(.bottom, 24)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 8)
+        .background(.bar)
+    }
+
+    private var taskCountsPill: some View {
+        HStack(spacing: 4) {
+            Text("\(openTasks.count)")
+                .fontWeight(.semibold)
+            Text("open")
+                .foregroundStyle(.secondary)
+            Text("·")
+                .foregroundStyle(.secondary)
+            Text("\(todayOpenCount)")
+                .fontWeight(.semibold)
+            Text("today")
+                .foregroundStyle(.secondary)
+        }
+        .font(.caption)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Capsule().fill(Color.secondary.opacity(0.12)))
     }
 
     // MARK: - Actions
@@ -194,7 +284,12 @@ struct NoteView: View {
     }
 
     // U1-5: editing a committed line replaces its old tasks rather than duplicating them.
-    private func commitLine(_ line: NoteLine, text: String) async {
+    // Reads live state (editingTexts) rather than taking the text as a parameter, so if both
+    // onSubmit and the newline-fallback in `row(for:)` somehow fire for the same commit, the
+    // second call harmlessly re-commits already-committed text instead of double-processing a
+    // stale value.
+    private func commitLine(_ line: NoteLine) async {
+        let text = editingTexts[line.id] ?? line.text
         editingTexts[line.id] = nil
         focusedTarget = nil
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -255,6 +350,11 @@ struct NoteView: View {
         return f.date(from: string)
     }
 
+    private func isToday(_ date: Date?) -> Bool {
+        guard let date else { return false }
+        return Calendar.current.isDateInToday(date)
+    }
+
     private func refreshBadge() async {
         let today = Calendar.current.startOfDay(for: .now)
         let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: today)!
@@ -272,6 +372,6 @@ struct NoteView: View {
 }
 
 #Preview {
-    NoteView(activateDictation: .constant(false))
+    NoteView(activateDictation: .constant(false), showTasks: .constant(false))
         .modelContainer(for: [TaskItem.self, NoteLine.self], inMemory: true)
 }

@@ -46,7 +46,12 @@ final class SpeechRecognizer {
 
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.record, mode: .measurement, options: .duckOthers)
+            // .measurement disables the system's audio processing entirely, which on some
+            // devices/routes leaves the input node reporting an invalid (zero-sample-rate)
+            // format — installTap then throws an Objective-C exception Swift can't catch,
+            // crashing the app outright. .default is what Apple's own speech-recognition sample
+            // code uses and does not have this failure mode.
+            try session.setCategory(.record, mode: .default, options: .duckOthers)
             try session.setActive(true, options: .notifyOthersOnDeactivation)
         } catch {
             state = .unavailable
@@ -55,6 +60,12 @@ final class SpeechRecognizer {
 
         let inputNode = engine.inputNode
         let format = inputNode.outputFormat(forBus: 0)
+        // Defensive guard against the crash above regardless of root cause: never install a tap
+        // with a format the engine can't actually use.
+        guard format.sampleRate > 0, format.channelCount > 0 else {
+            state = .unavailable
+            return
+        }
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in
             req.append(buffer)
         }

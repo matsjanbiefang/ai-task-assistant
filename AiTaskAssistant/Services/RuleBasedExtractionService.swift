@@ -47,6 +47,7 @@ struct LanguageRules: Sendable {
     let weekdayPhraseRules: [WeekdayPhraseRule]    // ordered — more specific patterns (e.g. "next <weekday>") before bare weekday
     let nextWeekPattern: String?
     let timePattern: String?                      // capture group 1 = hour, group 2 = optional minute
+    let timeOfDayWords: [String: String]           // colloquial time-of-day word -> fixed "HH:mm" (e.g. German "mittags" -> "12:00")
     let priorityPrefixes: [(pattern: String, priority: TaskPriority)]
     let categoryKeywords: [TaskCategory: [String]]
     let connectorWords: [String]                  // leftover words to trim from title edges after stripping a date phrase
@@ -87,10 +88,25 @@ struct RuleBasedExtractionService: Sendable {
         // The whole-line guess is still what drives the split decision itself, since we don't
         // know the sub-lines yet at that point.
         let splitRulesList = candidateRules(for: line, primaryLanguageCode: primaryLanguageCode)
-        return splitConjunctions(line, rulesList: splitRulesList).map { subLine in
+        let subLines = splitConjunctions(line, rulesList: splitRulesList)
+
+        // A run-on line usually states its date once, up front — "shopping tomorrow and painting
+        // in the evening" means both happen tomorrow, not that the second clause has no date at
+        // all. A later clause with no date of its own inherits the nearest earlier clause's date.
+        var carryDate: (dueDate: String, confidence: Double)?
+        var tasks: [ExtractedTask] = []
+        for subLine in subLines {
             let rulesList = candidateRules(for: subLine, primaryLanguageCode: primaryLanguageCode)
-            return buildTask(from: subLine, referenceDate: referenceDate, rulesList: rulesList)
+            var task = buildTask(from: subLine, referenceDate: referenceDate, rulesList: rulesList)
+            if task.dueDate == nil, let carryDate {
+                task.dueDate = carryDate.dueDate
+                task.dateConfidence = carryDate.confidence
+            } else if let date = task.dueDate {
+                carryDate = (date, task.dateConfidence)
+            }
+            tasks.append(task)
         }
+        return tasks
     }
 
     private func candidateRules(for line: String, primaryLanguageCode: String) -> [LanguageRules] {
@@ -148,7 +164,7 @@ struct RuleBasedExtractionService: Sendable {
 
         if dueTime == nil {
             for rules in rulesList {
-                guard let timeMatch = customTimeMatch(in: text, rules: rules) else { continue }
+                guard let timeMatch = anyTimeMatch(in: text, rules: rules) else { continue }
                 dueTime = timeMatch.time
                 rangesToStrip.append(timeMatch.range)
                 break
@@ -376,6 +392,25 @@ struct RuleBasedExtractionService: Sendable {
         return TimeMatch(range: range, time: String(format: "%02d:%02d", hour, minute))
     }
 
+    // Colloquial time-of-day words ("mittags"/"noon", "abends"/"evening") resolve to a fixed
+    // approximate clock time — less precise than an explicit "um 15 uhr"/"at 3pm", but still a
+    // clear, explicit user signal that shouldn't be dropped just because no exact minute was given.
+    private func timeOfDayMatch(in text: String, rules: LanguageRules) -> TimeMatch? {
+        let nsRange = NSRange(text.startIndex..., in: text)
+        for (word, time) in rules.timeOfDayWords {
+            let pattern = "\\b\(NSRegularExpression.escapedPattern(for: word))\\b"
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+                  let match = regex.firstMatch(in: text, range: nsRange),
+                  let range = Range(match.range, in: text) else { continue }
+            return TimeMatch(range: range, time: time)
+        }
+        return nil
+    }
+
+    private func anyTimeMatch(in text: String, rules: LanguageRules) -> TimeMatch? {
+        customTimeMatch(in: text, rules: rules) ?? timeOfDayMatch(in: text, rules: rules)
+    }
+
     // MARK: - Inline highlight support (§3 — notes-editor visual affordance, not scored)
 
     // Pattern strings only, no date resolution — deliberately mirrors the rule construction in
@@ -396,6 +431,7 @@ struct RuleBasedExtractionService: Sendable {
         patterns.append(contentsOf: rules.weekdayPhraseRules.map(\.pattern))
         if let pattern = rules.nextWeekPattern { patterns.append(pattern) }
         if let pattern = rules.timePattern { patterns.append(pattern) }
+        if let alt = wordAlternation(Array(rules.timeOfDayWords.keys)) { patterns.append("\\b(\(alt))\\b") }
         return patterns
     }
 
@@ -512,7 +548,7 @@ extension RuleBasedExtractionService {
     private static let englishRules = LanguageRules(
         code: "en",
         weekdayNames: [:],
-        todayWords: [],
+        todayWords: ["later"],
         tomorrowWords: [],
         dayAfterTomorrowWords: [],
         numberWords: ["a": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10],
@@ -521,8 +557,9 @@ extension RuleBasedExtractionService {
         weekdayPhraseRules: [],
         nextWeekPattern: #"\bnext week\b"#,
         timePattern: nil,
+        timeOfDayWords: ["morning": "08:00", "noon": "12:00", "midday": "12:00", "afternoon": "15:00", "evening": "19:00", "night": "22:00"],
         priorityPrefixes: [
-            (#"^(urgent|asap)\b\#(punctSep)"#, .high),
+            (#"^(urgent|asap|important)\b\#(punctSep)"#, .high),
             (#"^(high priority)\b\#(punctSep)"#, .high),
             (#"^(low priority|whenever)\b\#(punctSep)"#, .low),
         ],
@@ -549,7 +586,7 @@ extension RuleBasedExtractionService {
             "sonntag": 1, "montag": 2, "dienstag": 3, "mittwoch": 4,
             "donnerstag": 5, "freitag": 6, "samstag": 7, "sonnabend": 7,
         ],
-        todayWords: ["heute"],
+        todayWords: ["heute", "später"],
         tomorrowWords: ["morgen"],
         dayAfterTomorrowWords: ["übermorgen"],
         numberWords: [:],
@@ -562,8 +599,9 @@ extension RuleBasedExtractionService {
         ],
         nextWeekPattern: #"\bnächste\s+woche\b"#,
         timePattern: #"\bum\s+(\d{1,2})(?:[:.](\d{2}))?\s*uhr\b"#,
+        timeOfDayWords: ["morgens": "08:00", "vormittags": "10:00", "mittags": "12:00", "nachmittags": "15:00", "abends": "19:00", "nachts": "22:00"],
         priorityPrefixes: [
-            (#"^(dringend)\b\#(punctSep)"#, .high),
+            (#"^(dringend|wichtig)\b\#(punctSep)"#, .high),
             (#"^(hohe priorität)\b\#(punctSep)"#, .high),
             (#"^(niedrige priorität)\b\#(punctSep)"#, .low),
         ],
@@ -573,7 +611,7 @@ extension RuleBasedExtractionService {
             .shopping: ["kaufen", "einkaufen"],
             .finance: ["rechnung", "bezahlen", "steuer"],
         ],
-        connectorWords: ["am", "um", "den", "der", "die", "das"],
+        connectorWords: ["am", "um", "den", "der", "die", "das", "für", "zu", "zur"],
         conjunctionWords: ["und"],
         imperativeVerbs: [],
         verbSuffixes: ["en"]
@@ -585,7 +623,7 @@ extension RuleBasedExtractionService {
             "dimanche": 1, "lundi": 2, "mardi": 3, "mercredi": 4,
             "jeudi": 5, "vendredi": 6, "samedi": 7,
         ],
-        todayWords: ["aujourd'hui"],
+        todayWords: ["aujourd'hui", "plus tard"],
         tomorrowWords: ["demain"],
         dayAfterTomorrowWords: ["après-demain"],
         numberWords: ["un": 1, "deux": 2, "trois": 3, "quatre": 4, "cinq": 5, "six": 6, "sept": 7, "huit": 8, "neuf": 9, "dix": 10],
@@ -598,8 +636,9 @@ extension RuleBasedExtractionService {
         ],
         nextWeekPattern: #"\bsemaine\s+prochaine\b"#,
         timePattern: #"\bà\s+(\d{1,2})\s*h\s*(\d{2})?\b"#,
+        timeOfDayWords: ["matin": "08:00", "midi": "12:00", "après-midi": "15:00", "soir": "19:00", "nuit": "22:00"],
         priorityPrefixes: [
-            (#"^(urgent|asap|priorité haute|haute priorité)\b\#(punctSep)"#, .high),
+            (#"^(urgent|asap|important|importante|priorité haute|haute priorité)\b\#(punctSep)"#, .high),
             (#"^(priorité basse|basse priorité|faible priorité)\b\#(punctSep)"#, .low),
         ],
         categoryKeywords: [
@@ -625,7 +664,7 @@ extension RuleBasedExtractionService {
             "domingo": 1, "lunes": 2, "martes": 3, "miércoles": 4,
             "jueves": 5, "viernes": 6, "sábado": 7,
         ],
-        todayWords: ["hoy"],
+        todayWords: ["hoy", "más tarde"],
         tomorrowWords: ["mañana"],
         dayAfterTomorrowWords: ["pasado mañana"],
         numberWords: ["un": 1, "uno": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5, "seis": 6, "siete": 7, "ocho": 8, "nueve": 9, "diez": 10],
@@ -638,8 +677,11 @@ extension RuleBasedExtractionService {
         ],
         nextWeekPattern: #"\bpróxima\s+semana\b"#,
         timePattern: #"\ba\s+las\s+(\d{1,2})(?::(\d{2}))?\b"#,
+        // "mañana" is already the word for "tomorrow" — the multi-word "por la mañana" form is
+        // used here for "in the morning" instead of the bare word, to avoid colliding with it.
+        timeOfDayWords: ["por la mañana": "08:00", "mediodía": "12:00", "por la tarde": "15:00", "por la noche": "20:00"],
         priorityPrefixes: [
-            (#"^(urgente|asap|alta prioridad|prioridad alta)\b\#(punctSep)"#, .high),
+            (#"^(urgente|asap|importante|alta prioridad|prioridad alta)\b\#(punctSep)"#, .high),
             (#"^(baja prioridad|prioridad baja)\b\#(punctSep)"#, .low),
         ],
         categoryKeywords: [
@@ -664,7 +706,7 @@ extension RuleBasedExtractionService {
             "domenica": 1, "lunedì": 2, "martedì": 3, "mercoledì": 4,
             "giovedì": 5, "venerdì": 6, "sabato": 7,
         ],
-        todayWords: ["oggi"],
+        todayWords: ["oggi", "più tardi"],
         tomorrowWords: ["domani"],
         dayAfterTomorrowWords: ["dopodomani"],
         numberWords: ["un": 1, "due": 2, "tre": 3, "quattro": 4, "cinque": 5, "sei": 6, "sette": 7, "otto": 8, "nove": 9, "dieci": 10],
@@ -677,8 +719,9 @@ extension RuleBasedExtractionService {
         ],
         nextWeekPattern: #"\bprossima\s+settimana\b"#,
         timePattern: #"\balle\s+(\d{1,2})(?::(\d{2}))?\b"#,
+        timeOfDayWords: ["mattina": "08:00", "mezzogiorno": "12:00", "pomeriggio": "15:00", "sera": "19:00", "notte": "22:00"],
         priorityPrefixes: [
-            (#"^(urgente|asap|alta priorità)\b\#(punctSep)"#, .high),
+            (#"^(urgente|asap|importante|alta priorità)\b\#(punctSep)"#, .high),
             (#"^(bassa priorità)\b\#(punctSep)"#, .low),
         ],
         categoryKeywords: [
@@ -704,7 +747,7 @@ extension RuleBasedExtractionService {
             "domingo": 1, "segunda": 2, "terça": 3, "quarta": 4,
             "quinta": 5, "sexta": 6, "sábado": 7,
         ],
-        todayWords: ["hoje"],
+        todayWords: ["hoje", "mais tarde"],
         tomorrowWords: ["amanhã"],
         dayAfterTomorrowWords: ["depois de amanhã"],
         numberWords: ["um": 1, "dois": 2, "três": 3, "quatro": 4, "cinco": 5, "seis": 6, "sete": 7, "oito": 8, "nove": 9, "dez": 10],
@@ -717,8 +760,9 @@ extension RuleBasedExtractionService {
         ],
         nextWeekPattern: #"\bpróxima\s+semana\b"#,
         timePattern: #"\bàs\s+(\d{1,2})[h:](\d{2})?\b"#,
+        timeOfDayWords: ["manhã": "08:00", "meio-dia": "12:00", "tarde": "15:00", "noite": "19:00"],
         priorityPrefixes: [
-            (#"^(urgente|asap|alta prioridade)\b\#(punctSep)"#, .high),
+            (#"^(urgente|asap|importante|alta prioridade)\b\#(punctSep)"#, .high),
             (#"^(baixa prioridade)\b\#(punctSep)"#, .low),
         ],
         categoryKeywords: [
@@ -743,7 +787,7 @@ extension RuleBasedExtractionService {
             "zondag": 1, "maandag": 2, "dinsdag": 3, "woensdag": 4,
             "donderdag": 5, "vrijdag": 6, "zaterdag": 7,
         ],
-        todayWords: ["vandaag"],
+        todayWords: ["vandaag", "later"],
         tomorrowWords: ["morgen"],
         dayAfterTomorrowWords: ["overmorgen"],
         numberWords: ["een": 1, "twee": 2, "drie": 3, "vier": 4, "vijf": 5, "zes": 6, "zeven": 7, "acht": 8, "negen": 9, "tien": 10],
@@ -756,8 +800,9 @@ extension RuleBasedExtractionService {
         ],
         nextWeekPattern: #"\bvolgende\s+week\b"#,
         timePattern: #"\bom\s+(\d{1,2})(?:[:.](\d{2}))?\s*uur\b"#,
+        timeOfDayWords: ["ochtend": "08:00", "middag": "12:00", "namiddag": "15:00", "avond": "19:00", "nacht": "22:00"],
         priorityPrefixes: [
-            (#"^(urgent|asap|hoge prioriteit)\b\#(punctSep)"#, .high),
+            (#"^(urgent|asap|belangrijk|hoge prioriteit)\b\#(punctSep)"#, .high),
             (#"^(lage prioriteit)\b\#(punctSep)"#, .low),
         ],
         categoryKeywords: [
@@ -783,7 +828,7 @@ extension RuleBasedExtractionService {
             "niedziela": 1, "poniedziałek": 2, "wtorek": 3, "środa": 4, "środę": 4,
             "czwartek": 5, "piątek": 6, "sobota": 7, "sobotę": 7,
         ],
-        todayWords: ["dziś", "dzisiaj"],
+        todayWords: ["dziś", "dzisiaj", "później"],
         tomorrowWords: ["jutro"],
         dayAfterTomorrowWords: ["pojutrze"],
         numberWords: ["jeden": 1, "dwa": 2, "trzy": 3, "cztery": 4, "pięć": 5, "sześć": 6, "siedem": 7, "osiem": 8, "dziewięć": 9, "dziesięć": 10],
@@ -796,8 +841,9 @@ extension RuleBasedExtractionService {
         ],
         nextWeekPattern: #"\bprzyszłym\s+tygodniu\b"#,
         timePattern: #"\bo\s+godzinie\s+(\d{1,2})(?::(\d{2}))?\b"#,
+        timeOfDayWords: ["rano": "08:00", "południe": "12:00", "popołudniu": "15:00", "wieczorem": "19:00", "noc": "22:00"],
         priorityPrefixes: [
-            (#"^(pilne|asap|wysoki priorytet)\b\#(punctSep)"#, .high),
+            (#"^(pilne|asap|ważne|wysoki priorytet)\b\#(punctSep)"#, .high),
             (#"^(niski priorytet)\b\#(punctSep)"#, .low),
         ],
         categoryKeywords: [

@@ -51,7 +51,7 @@ func nextWeekdayDate(_ weekday: Int, skipToday: Bool = false) -> String {
     return offsetDate(delta)
 }
 
-private let monday = 2, friday = 6, saturday = 7
+private let monday = 2, wednesday = 4, friday = 6, saturday = 7
 
 struct ExpectedTask: Sendable {
     let title: String
@@ -433,5 +433,33 @@ let extractionCorpus: [CorpusCase] = [
             ExpectedTask(title: "Kupić chleb", dueDate: nil, dueTime: nil, priority: nil),
             ExpectedTask(title: "Zadzwonić do mamy", dueDate: nil, dueTime: nil, priority: nil),
         ],
+    ]),
+
+    // MARK: Real-device feedback fixes (2026-07-02): "wichtig"/"important" priority trigger,
+    // colloquial time-of-day words, "später"/"later" -> today, and date inheritance across a
+    // split run-on line's later clause.
+    CorpusCase(id: 83, focus: .priority, input: "wichtig für nächsten mittwoch folien vorbereiten arbeit", expected: [
+        [ExpectedTask(title: "Folien vorbereiten Arbeit", dueDate: nextWeekdayDate(wednesday, skipToday: true), dueTime: nil, priority: .high)],
+    ]),
+    CorpusCase(id: 84, focus: .language, input: "mittags treffen mit papa", expected: [
+        [ExpectedTask(title: "Treffen mit Papa", dueDate: nil, dueTime: "12:00", priority: nil)],
+    ]),
+    CorpusCase(id: 85, focus: .dates, input: "später einkaufen", expected: [
+        [ExpectedTask(title: "Einkaufen", dueDate: offsetDate(0), dueTime: nil, priority: nil)],
+    ]),
+    CorpusCase(id: 86, focus: .splitting, input: "morgen baumarkt einkaufen und abends zur wohnung streichen", expected: [
+        [
+            ExpectedTask(title: "Baumarkt einkaufen", dueDate: offsetDate(1), dueTime: nil, priority: nil),
+            ExpectedTask(title: "Wohnung streichen", dueDate: offsetDate(1), dueTime: "19:00", priority: nil),
+        ],
+    ]),
+    CorpusCase(id: 87, focus: .priority, input: "important: renew the passport", expected: [
+        [ExpectedTask(title: "Renew the passport", dueDate: nil, dueTime: nil, priority: .high)],
+    ]),
+    CorpusCase(id: 88, focus: .dates, input: "later call the bank", expected: [
+        [ExpectedTask(title: "Call the bank", dueDate: offsetDate(0), dueTime: nil, priority: nil)],
+    ]),
+    CorpusCase(id: 89, focus: .language, input: "noon call with the client", expected: [
+        [ExpectedTask(title: "Call with the client", dueDate: nil, dueTime: "12:00", priority: nil)],
     ]),
 ]
