@@ -31,9 +31,7 @@ struct ExtractedTask: Sendable {
 struct RuleBasedExtractionService: Sendable {
     static let shared = RuleBasedExtractionService()
 
-    // NSDataDetector isn't Sendable, but this instance is never mutated after creation, so sharing
-    // it read-only across concurrent callers (incl. parallel test execution) is safe.
-    nonisolated(unsafe) private static let dataDetector = try? NSDataDetector(
+    private static let dataDetector = try? NSDataDetector(
         types: NSTextCheckingResult.CheckingType.date.rawValue
     )
 
