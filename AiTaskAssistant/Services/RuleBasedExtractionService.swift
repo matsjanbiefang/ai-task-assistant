@@ -462,9 +462,9 @@ extension RuleBasedExtractionService {
         nextWeekPattern: #"\bnext week\b"#,
         timePattern: nil,
         priorityPrefixes: [
-            (#"^(urgent|asap)\#(punctSep)"#, .high),
-            (#"^(high priority)\#(punctSep)"#, .high),
-            (#"^(low priority|whenever)\#(punctSep)"#, .low),
+            (#"^(urgent|asap)\b\#(punctSep)"#, .high),
+            (#"^(high priority)\b\#(punctSep)"#, .high),
+            (#"^(low priority|whenever)\b\#(punctSep)"#, .low),
         ],
         categoryKeywords: [
             .work: ["work", "meeting", "deadline", "project", "client", "office", "kickoff"],
@@ -503,9 +503,9 @@ extension RuleBasedExtractionService {
         nextWeekPattern: #"\bnächste\s+woche\b"#,
         timePattern: #"\bum\s+(\d{1,2})(?:[:.](\d{2}))?\s*uhr\b"#,
         priorityPrefixes: [
-            (#"^(dringend)\#(punctSep)"#, .high),
-            (#"^(hohe priorität)\#(punctSep)"#, .high),
-            (#"^(niedrige priorität)\#(punctSep)"#, .low),
+            (#"^(dringend)\b\#(punctSep)"#, .high),
+            (#"^(hohe priorität)\b\#(punctSep)"#, .high),
+            (#"^(niedrige priorität)\b\#(punctSep)"#, .low),
         ],
         categoryKeywords: [
             .work: ["büro", "arbeit", "projekt", "kickoff"],
@@ -539,8 +539,8 @@ extension RuleBasedExtractionService {
         nextWeekPattern: #"\bsemaine\s+prochaine\b"#,
         timePattern: #"\bà\s+(\d{1,2})\s*h\s*(\d{2})?\b"#,
         priorityPrefixes: [
-            (#"^(urgent|asap|priorité haute|haute priorité)\#(punctSep)"#, .high),
-            (#"^(priorité basse|basse priorité|faible priorité)\#(punctSep)"#, .low),
+            (#"^(urgent|asap|priorité haute|haute priorité)\b\#(punctSep)"#, .high),
+            (#"^(priorité basse|basse priorité|faible priorité)\b\#(punctSep)"#, .low),
         ],
         categoryKeywords: [
             .work: ["travail", "réunion", "projet", "client", "bureau"],
@@ -579,8 +579,8 @@ extension RuleBasedExtractionService {
         nextWeekPattern: #"\bpróxima\s+semana\b"#,
         timePattern: #"\ba\s+las\s+(\d{1,2})(?::(\d{2}))?\b"#,
         priorityPrefixes: [
-            (#"^(urgente|asap|alta prioridad|prioridad alta)\#(punctSep)"#, .high),
-            (#"^(baja prioridad|prioridad baja)\#(punctSep)"#, .low),
+            (#"^(urgente|asap|alta prioridad|prioridad alta)\b\#(punctSep)"#, .high),
+            (#"^(baja prioridad|prioridad baja)\b\#(punctSep)"#, .low),
         ],
         categoryKeywords: [
             .work: ["trabajo", "reunión", "proyecto", "cliente", "oficina"],
@@ -618,8 +618,8 @@ extension RuleBasedExtractionService {
         nextWeekPattern: #"\bprossima\s+settimana\b"#,
         timePattern: #"\balle\s+(\d{1,2})(?::(\d{2}))?\b"#,
         priorityPrefixes: [
-            (#"^(urgente|asap|alta priorità)\#(punctSep)"#, .high),
-            (#"^(bassa priorità)\#(punctSep)"#, .low),
+            (#"^(urgente|asap|alta priorità)\b\#(punctSep)"#, .high),
+            (#"^(bassa priorità)\b\#(punctSep)"#, .low),
         ],
         categoryKeywords: [
             .work: ["lavoro", "riunione", "progetto", "cliente", "ufficio"],
@@ -658,8 +658,8 @@ extension RuleBasedExtractionService {
         nextWeekPattern: #"\bpróxima\s+semana\b"#,
         timePattern: #"\bàs\s+(\d{1,2})[h:](\d{2})?\b"#,
         priorityPrefixes: [
-            (#"^(urgente|asap|alta prioridade)\#(punctSep)"#, .high),
-            (#"^(baixa prioridade)\#(punctSep)"#, .low),
+            (#"^(urgente|asap|alta prioridade)\b\#(punctSep)"#, .high),
+            (#"^(baixa prioridade)\b\#(punctSep)"#, .low),
         ],
         categoryKeywords: [
             .work: ["trabalho", "reunião", "projeto", "cliente", "escritório"],
@@ -697,8 +697,8 @@ extension RuleBasedExtractionService {
         nextWeekPattern: #"\bvolgende\s+week\b"#,
         timePattern: #"\bom\s+(\d{1,2})(?:[:.](\d{2}))?\s*uur\b"#,
         priorityPrefixes: [
-            (#"^(urgent|asap|hoge prioriteit)\#(punctSep)"#, .high),
-            (#"^(lage prioriteit)\#(punctSep)"#, .low),
+            (#"^(urgent|asap|hoge prioriteit)\b\#(punctSep)"#, .high),
+            (#"^(lage prioriteit)\b\#(punctSep)"#, .low),
         ],
         categoryKeywords: [
             .work: ["werk", "vergadering", "project", "klant", "kantoor"],
@@ -737,8 +737,8 @@ extension RuleBasedExtractionService {
         nextWeekPattern: #"\bprzyszłym\s+tygodniu\b"#,
         timePattern: #"\bo\s+godzinie\s+(\d{1,2})(?::(\d{2}))?\b"#,
         priorityPrefixes: [
-            (#"^(pilne|asap|wysoki priorytet)\#(punctSep)"#, .high),
-            (#"^(niski priorytet)\#(punctSep)"#, .low),
+            (#"^(pilne|asap|wysoki priorytet)\b\#(punctSep)"#, .high),
+            (#"^(niski priorytet)\b\#(punctSep)"#, .low),
         ],
         categoryKeywords: [
             .work: ["praca", "spotkanie", "projekt", "klient", "biuro"],
