@@ -645,3 +645,110 @@ it isn't mistaken for something Milestone 1 broke.
 
 **Next:** Milestone 2 (voice input adapted to the notes surface, prd-update-01.md §9) — U2-1/U2-2
 — or, given the verification gap above, a real-device/simulator pass on Milestone 1 first.
+
+---
+
+## Real-Device Feedback Round 1 — 2026-07-02
+
+Build 3 shipped to TestFlight and the user actually tested it — this is exactly the
+"verification gap" flagged at the end of Milestone 1, closed by real usage instead of a
+simulator pass. Feedback covered a crash, five extraction gaps, and a near-total interaction/
+navigation redesign request. All addressed in one batch (commits `ed4f446`, `41748a5`).
+
+### Crash: microphone button
+
+**File:** `AiTaskAssistant/Services/SpeechRecognizer.swift`
+
+Root cause: `AVAudioSession` was configured with `mode: .measurement`, which disables the
+system's own audio processing. On some devices/routes this leaves `AVAudioEngine`'s input node
+reporting a format with `sampleRate == 0`, and `installTap(onBus:bufferSize:format:)` throws an
+Objective-C exception for an invalid format — Swift's `do/catch` cannot catch this, so it crashes
+the process outright rather than surfacing as a normal Swift `Error`. Fixed two ways: switched to
+`mode: .default` (what Apple's own speech-recognition sample code uses, without this failure
+mode), and added a defensive `guard format.sampleRate > 0, format.channelCount > 0` before
+`installTap` so the app degrades to `.unavailable` instead of crashing regardless of root cause.
+
+### Extraction gaps (prd-update-02.md §4 scope — applied to all 8 languages)
+
+**File:** `AiTaskAssistant/Services/RuleBasedExtractionService.swift`
+
+- **"wichtig"/"important" not read as a priority signal.** Added as a prefix trigger alongside
+  each language's existing urgent-equivalent word (`dringend|wichtig` for German, etc.).
+- **"Mittags"/colloquial time-of-day words not recognized.** New `LanguageRules.timeOfDayWords:
+  [String: String]` (word -> fixed "HH:mm"), tried alongside the existing numeric time patterns
+  via a new `anyTimeMatch` helper. German: morgens/vormittags/mittags/nachmittags/abends/nachts.
+  Equivalent sets added for the other 7 languages.
+- **"Später"/"later" not understood as "today, but some unspecified later time".** Added to each
+  language's `todayWords` list (resolves the date to today; deliberately no specific `dueTime`
+  attached, since none was given).
+- **Run-on line splits lost the shared date.** "Morgen Baumarkt einkaufen und abends zur Wohnung
+  streichen" split into two tasks per §3 as designed, but the second clause ("abends zur Wohnung
+  streichen") has no date word of its own — it was landing with no date at all instead of
+  inheriting "tomorrow" from the first clause. Restructured `extractLine` to track a `carryDate`
+  across a line's split sub-tasks: a later clause with no date of its own now inherits the
+  nearest earlier clause's date (forward-only — a first clause with no date does not go back and
+  inherit from a later one, since the date is conventionally stated once, up front).
+- German title cleanup also trims "für"/"zu"/"zur" now (matches the user's own example verbatim).
+
+**First test run of this batch (97%, 98/101) caught a real regression before it shipped:**
+included "morning"/"evening"/"night"/"afternoon" in English's `timeOfDayWords`, which broke
+"morning run tomorrow" — NSDataDetector-independent stripping turned "Morning run" into "Run"
+plus a spurious 08:00 time, because English commonly uses those words as an ordinary part of a
+task's own title ("morning run", "evening walk"), unlike German "mittags"/"abends" which aren't
+used that way. Removed all four, kept only "noon"/"midday" (lower collision risk). Also caught two
+of my own corpus mislabels in the same run — expected mid-sentence capitalization of "Arbeit" and
+"Papa" that the engine has never done (it only capitalizes the sentence-initial letter,
+English-style) — fixed the expectations, not the engine, since the expectations were the actual
+mistake. Final run: **100% (101/101)**.
+
+### Notes UI/interaction fixes
+
+**File:** `AiTaskAssistant/Views/NoteView.swift`
+
+- **"Shifts right instead of wrapping like Notes."** Root cause: the per-line and compose
+  `TextField`s dropped `axis: .vertical` during the Milestone 1 rewrite (to make Return reliably
+  call `.onSubmit` instead of risk inserting a literal newline). Re-added `axis: .vertical` (fixes
+  the wrapping) plus a newline-detection `.onChange` fallback that treats an inserted "\n" as an
+  implicit commit — belt-and-suspenders against `axis: .vertical`'s Return-key behavior not being
+  100% certain across iOS versions without a device to verify directly.
+- **"Can't go back and edit a task."** Likely cause: setting `@FocusState` in the same render pass
+  that swaps a row from styled `Text` to an editable `TextField` can be dropped by SwiftUI, since
+  the `TextField` isn't in the view tree yet at the moment focus changes. Deferred the focus
+  assignment by one runloop tick (`DispatchQueue.main.async`) after starting an edit.
+- **Completed tasks now show struck through in the note.** `NoteView` added a `@Query private var
+  allTasks: [TaskItem]`; a line's display checks whether every task with `sourceLineID == line.id`
+  is completed and applies strikethrough + secondary color via the same `NSAttributedString`
+  bridging path already used for date-phrase highlighting (safer than the newer native
+  `AttributedString` property API, which wasn't verified working yet at the time).
+- **Tapping a line now has two distinct tap targets.** The line's text opens it for editing (as
+  before); its status icon now separately opens the tasks sheet, per the user's request to jump
+  straight to the task list from a logged line instead of only being able to edit its text.
+
+### Navigation redesign: no more swipe, Amy-style docked bottom bar
+
+**Files:** `AiTaskAssistant/Views/ContentView.swift`, `AiTaskAssistant/Views/NoteView.swift`
+
+User specifically disliked swiping to reach the calendar/tasks view and wanted the input bar to
+dock directly above the keyboard (referencing a screenshot of the "Amy" app's UI). Both came from
+the same root fix: `ContentView` no longer wraps a `TabView` — `NoteView` is now the sole
+top-level screen after onboarding. That `TabView` had `.ignoresSafeArea()` applied to itself
+(needed for the old page-swipe to look edge-to-edge), which was suppressing SwiftUI's normal
+keyboard-avoidance behavior for `NoteView`'s children — removing it as a side effect of the
+navigation change is what makes the new bottom bar dock above the keyboard, without needing a
+custom UIKit `inputAccessoryView` bridge.
+
+New bottom bar (`NoteView.bottomBar`): mic button, a pill showing open-task count and today's
+open-task count (queried live from `allTasks`), a keyboard-dismiss button (visible only while
+something is focused), and a calendar icon. Both the calendar icon and a line's status icon open
+`AssistantView` as a swipe-up `.sheet` (`.presentationDetents([.medium, .large])`,
+`.presentationDragIndicator(.visible)`) instead of a separate page reached by swiping.
+
+**Known limitation carried forward, not addressed this round:** tapping a line's status icon or
+the calendar icon opens the tasks sheet generically — it does not scroll to or highlight the
+specific task that was tapped. Full "jump to this exact task" would need `AssistantView` to accept
+a target task ID and scroll to it; out of scope for this pass.
+
+**Status:** build succeeded and extraction accuracy held at 100% (101/101) via CI, same
+verification-gap caveat as Milestone 1 — none of the interaction/visual changes have been seen
+running, only compiled. Bumped to build 4 for the next TestFlight round, which is what will
+actually answer whether these fixes feel right.
