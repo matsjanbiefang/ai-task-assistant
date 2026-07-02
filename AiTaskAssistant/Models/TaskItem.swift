@@ -24,6 +24,12 @@ final class TaskItem {
     // its old tasks instead of duplicating them. nil for tasks with no line to trace back to
     // (shouldn't normally happen post-redesign, but keeps old/imported data from crashing lookups).
     var sourceLineID: UUID?
+    // Set when this task was split from a line via a sequential connector ("and then"/"und
+    // dann") — shared by the other step(s) from the same line. sequenceIndex is this task's
+    // 0-based position among them (always a pair currently, since splitting only ever produces
+    // two sub-lines).
+    var linkedGroupID: UUID?
+    var sequenceIndex: Int?
 
     init(
         id: UUID = UUID(),
@@ -33,7 +39,9 @@ final class TaskItem {
         priority: String? = nil,
         category: String? = nil,
         dateConfidence: Double = 1.0,
-        sourceLineID: UUID? = nil
+        sourceLineID: UUID? = nil,
+        linkedGroupID: UUID? = nil,
+        sequenceIndex: Int? = nil
     ) {
         self.id = id
         self.title = title
@@ -45,5 +53,7 @@ final class TaskItem {
         self.dateConfidence = dateConfidence
         self.createdAt = .now
         self.sourceLineID = sourceLineID
+        self.linkedGroupID = linkedGroupID
+        self.sequenceIndex = sequenceIndex
     }
 }

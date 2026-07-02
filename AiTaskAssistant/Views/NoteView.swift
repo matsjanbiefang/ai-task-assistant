@@ -23,6 +23,7 @@ struct NoteView: View {
     @State private var composeText = ""
     @State private var permissionDenied = false
     @State private var speech = SpeechRecognizer()
+    @State private var targetTask: TaskItem?
     @FocusState private var focusedTarget: FocusTarget?
 
     private let extraction = RuleBasedExtractionService.shared
@@ -53,6 +54,22 @@ struct NoteView: View {
                 .onChange(of: lines.count) { _, _ in
                     withAnimation { proxy.scrollTo("compose", anchor: .bottom) }
                 }
+                .onChange(of: focusedTarget) { oldValue, newValue in
+                    // Committing here (rather than from onSubmit) means a line's edits are saved
+                    // no matter how focus leaves it — pressing Return, tapping a different line,
+                    // tapping compose, or dismissing the keyboard all funnel through this single
+                    // path instead of each needing their own commit call.
+                    if case .line(let id) = oldValue, let line = lines.first(where: { $0.id == id }) {
+                        Task { await commitLine(line) }
+                    }
+                    withAnimation {
+                        switch newValue {
+                        case .line(let id): proxy.scrollTo(id, anchor: .bottom)
+                        case .compose: proxy.scrollTo("compose", anchor: .bottom)
+                        case nil: break
+                        }
+                    }
+                }
             }
             bottomBar
         }
@@ -68,7 +85,7 @@ struct NoteView: View {
             if isRecording { composeText = new }
         }
         .sheet(isPresented: $showTasks) {
-            AssistantView()
+            AssistantView(initialTask: targetTask)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
@@ -76,51 +93,47 @@ struct NoteView: View {
 
     // MARK: - Rows
 
-    @ViewBuilder
+    // Always mounts a real TextField (never conditionally swaps it for a Text/Button pair) —
+    // tapping to re-enter edit mode is then just the OS's normal text-field-tap-to-focus
+    // behavior, not something SwiftUI's conditional view identity can silently drop. The styled/
+    // highlighted rendering sits on top as a non-interactive overlay while unfocused, with the
+    // real field's own text made invisible so it doesn't show twice.
     private func row(for line: NoteLine) -> some View {
-        if focusedTarget == .line(line.id) {
-            TextField("", text: editingTextBinding(for: line), axis: .vertical)
-                .font(.title3)
-                .lineLimit(1...6)
-                .focused($focusedTarget, equals: .line(line.id))
-                .submitLabel(.done)
-                .onSubmit {
-                    Task { await commitLine(line) }
-                }
-                .onChange(of: editingTexts[line.id]) { _, newValue in
-                    guard let newValue, newValue.contains("\n") else { return }
-                    editingTexts[line.id] = newValue.replacingOccurrences(of: "\n", with: "")
-                    Task { await commitLine(line) }
-                }
-                .padding(.vertical, 4)
-        } else {
-            HStack(alignment: .top, spacing: 8) {
-                Button {
-                    editingTexts[line.id] = line.text
-                    // Setting focus in the same tick the row swaps from Text to TextField can be
-                    // dropped by SwiftUI — the TextField isn't in the view tree yet at the moment
-                    // focusedTarget changes. Deferring one runloop tick makes it reliable.
-                    DispatchQueue.main.async {
-                        focusedTarget = .line(line.id)
+        let isEditing = focusedTarget == .line(line.id)
+        return HStack(alignment: .top, spacing: 8) {
+            ZStack(alignment: .topLeading) {
+                TextField("", text: editingTextBinding(for: line), axis: .vertical)
+                    .font(.title3)
+                    .lineLimit(1...6)
+                    .focused($focusedTarget, equals: .line(line.id))
+                    .foregroundStyle(isEditing ? Color.primary : Color.clear)
+                    .submitLabel(.done)
+                    .onSubmit { focusedTarget = nil }
+                    .onChange(of: editingTexts[line.id]) { _, newValue in
+                        guard let newValue, newValue.contains("\n") else { return }
+                        editingTexts[line.id] = newValue.replacingOccurrences(of: "\n", with: "")
+                        focusedTarget = nil
                     }
-                } label: {
+
+                if !isEditing {
                     highlightedText(line.text, struckThrough: isLineCompleted(line))
                         .font(.title3)
-                        .foregroundStyle(.primary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .allowsHitTesting(false)
                 }
-                .buttonStyle(.plain)
-
-                Button {
-                    showTasks = true
-                } label: {
-                    statusIcon(for: line)
-                }
-                .buttonStyle(.plain)
-                .padding(.top, 4)
             }
-            .padding(.vertical, 4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button {
+                targetTask = allTasks.first { $0.sourceLineID == line.id }
+                showTasks = true
+            } label: {
+                statusIcon(for: line)
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 4)
         }
+        .padding(.vertical, 4)
+        .id(line.id)
     }
 
     private var composeRow: some View {
@@ -170,21 +183,56 @@ struct NoteView: View {
         return tasksForLine.allSatisfy(\.isCompleted)
     }
 
-    // §3: Amy-pattern inline status icon — tapping it jumps to the tasks sheet (user feedback).
+    // §3 + user feedback: small icon row showing exactly what got extracted from the line (time /
+    // category / priority / linked-step), not just a generic task-count badge — tapping it jumps
+    // straight to the relevant task(s) in the sheet.
     @ViewBuilder
     private func statusIcon(for line: NoteLine) -> some View {
+        let tasksForLine = allTasks.filter { $0.sourceLineID == line.id }
         if line.hasLowConfidence {
             Image(systemName: "questionmark.circle")
                 .foregroundStyle(.orange)
-        } else if line.taskCount > 1 {
-            Text("\(line.taskCount)")
-                .font(.caption2.bold())
-                .frame(width: 18, height: 18)
-                .background(Circle().fill(Color.accentColor.opacity(0.15)))
-                .foregroundStyle(Color.accentColor)
-        } else if line.taskCount == 1 {
-            Image(systemName: "checkmark.circle")
-                .foregroundStyle(.secondary)
+        } else if !tasksForLine.isEmpty {
+            HStack(spacing: 3) {
+                if tasksForLine.contains(where: { $0.dueTime != nil }) {
+                    Image(systemName: "clock")
+                }
+                if let category = tasksForLine.compactMap(\.category).first {
+                    Image(systemName: categoryIcon(category))
+                }
+                if let priority = tasksForLine.compactMap(\.priority).first {
+                    Image(systemName: "flag.fill")
+                        .foregroundStyle(priorityColor(priority))
+                }
+                if tasksForLine.contains(where: { $0.linkedGroupID != nil }) {
+                    Image(systemName: "link")
+                }
+                if line.taskCount > 1 {
+                    Text("\(line.taskCount)")
+                        .font(.caption2.bold())
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    private func categoryIcon(_ category: String) -> String {
+        switch category {
+        case "work": return "briefcase"
+        case "health": return "heart"
+        case "shopping": return "cart"
+        case "finance": return "dollarsign.circle"
+        case "personal": return "person"
+        default: return "tag"
+        }
+    }
+
+    private func priorityColor(_ priority: String) -> Color {
+        switch priority {
+        case "high": return .red
+        case "medium": return .orange
+        default: return .secondary
         }
     }
 
@@ -225,6 +273,7 @@ struct NoteView: View {
             }
 
             Button {
+                targetTask = nil
                 showTasks = true
             } label: {
                 Image(systemName: "calendar")
@@ -284,14 +333,13 @@ struct NoteView: View {
     }
 
     // U1-5: editing a committed line replaces its old tasks rather than duplicating them.
-    // Reads live state (editingTexts) rather than taking the text as a parameter, so if both
-    // onSubmit and the newline-fallback in `row(for:)` somehow fire for the same commit, the
-    // second call harmlessly re-commits already-committed text instead of double-processing a
-    // stale value.
+    // Reads live state (editingTexts) rather than taking the text as a parameter — this is now
+    // called exactly once per focus-leaving-the-line event (from the ScrollView's onChange(of:
+    // focusedTarget) in `body`), so there's no longer a double-commit path to guard against, but
+    // reading live state instead of a captured value is still the safer default.
     private func commitLine(_ line: NoteLine) async {
         let text = editingTexts[line.id] ?? line.text
         editingTexts[line.id] = nil
-        focusedTarget = nil
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
             await deleteLine(line)
@@ -309,13 +357,17 @@ struct NoteView: View {
         line.hasLowConfidence = extracted.contains { $0.dateConfidence < 0.7 }
 
         for task in extracted {
+            let dueDate = parsedDate(task.dueDate)
             let item = TaskItem(
                 title: task.title,
-                dueDate: parsedDate(task.dueDate),
+                dueDate: dueDate,
+                dueTime: parsedTime(task.dueTime, referenceDay: dueDate),
                 priority: task.priority?.rawValue,
                 category: task.category?.rawValue,
                 dateConfidence: task.dateConfidence,
-                sourceLineID: line.id
+                sourceLineID: line.id,
+                linkedGroupID: task.groupID,
+                sequenceIndex: task.sequenceIndex
             )
             modelContext.insert(item)
             if let date = item.dueDate, date > .now {
@@ -348,6 +400,15 @@ struct NoteView: View {
         f.dateFormat = "yyyy-MM-dd"
         f.timeZone = .current
         return f.date(from: string)
+    }
+
+    // Combines an extracted "HH:mm" with the task's own due day (or today, if undated) so
+    // TaskItem.dueTime is a coherent Date rather than just floating minutes with no day at all.
+    private func parsedTime(_ hhmm: String?, referenceDay: Date?) -> Date? {
+        guard let hhmm else { return nil }
+        let parts = hhmm.split(separator: ":")
+        guard parts.count == 2, let hour = Int(parts[0]), let minute = Int(parts[1]) else { return nil }
+        return Calendar.current.date(bySettingHour: hour, minute: minute, second: 0, of: referenceDay ?? .now)
     }
 
     private func isToday(_ date: Date?) -> Bool {

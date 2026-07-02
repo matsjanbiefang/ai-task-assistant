@@ -87,4 +87,38 @@ struct ExtractionAccuracyTests {
         // close the gap — do not raise/lower this to make the suite pass; fix the engine instead.
         #expect(accuracy >= 0.9, "overall accuracy \(Int(accuracy * 100))% is below the §10 target of 90%")
     }
+
+    // Category is deliberately excluded from the scored corpus (see ExtractionCorpus.swift's own
+    // policy comment) — verified directly here instead of being shoehorned into ExpectedTask.
+    @Test
+    func compoundGermanCategoryIsDetected() {
+        let service = RuleBasedExtractionService.shared
+        let tasks = service.extractLine("arzttermin später, muss an mein rezept denken", referenceDate: corpusToday)
+        #expect(tasks.first?.category == .health)
+    }
+
+    // Real-device feedback (2026-07-02): "adjust the laptop and then inform Martin about it"
+    // should split into two dependent steps, not two unrelated tasks — "and then"/"und dann"
+    // marks the split as sequential, and both resulting tasks share a groupID (not part of the
+    // scored corpus shape, so checked directly here).
+    @Test
+    func sequentialConnectorLinksSplitTasks() {
+        let service = RuleBasedExtractionService.shared
+        let tasks = service.extractLine("need to adjust the laptop and then inform martin about it", referenceDate: corpusToday)
+        #expect(tasks.count == 2)
+        #expect(tasks[0].groupID != nil)
+        #expect(tasks[0].groupID == tasks[1].groupID)
+        #expect(tasks[0].sequenceIndex == 0)
+        #expect(tasks[1].sequenceIndex == 1)
+        #expect(tasks[1].title == "Inform martin about it")
+    }
+
+    @Test
+    func plainConjunctionDoesNotLinkSplitTasks() {
+        let service = RuleBasedExtractionService.shared
+        let tasks = service.extractLine("buy milk and call the dentist", referenceDate: corpusToday)
+        #expect(tasks.count == 2)
+        #expect(tasks[0].groupID == nil)
+        #expect(tasks[1].groupID == nil)
+    }
 }

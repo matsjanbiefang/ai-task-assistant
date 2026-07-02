@@ -22,6 +22,23 @@ struct TaskEditView: View {
                         get: { task.dueDate != nil },
                         set: { if !$0 { task.dueDate = nil } else { task.dueDate = .now } }
                     ))
+
+                    DatePicker("Due time", selection: Binding(
+                        get: { task.dueTime ?? .now },
+                        set: { task.dueTime = $0 }
+                    ), displayedComponents: .hourAndMinute)
+                    Toggle("Has due time", isOn: Binding(
+                        get: { task.dueTime != nil },
+                        set: { if !$0 { task.dueTime = nil } else { task.dueTime = .now } }
+                    ))
+                }
+
+                if task.linkedGroupID != nil {
+                    Section("Linked task") {
+                        Label("Step \((task.sequenceIndex ?? 0) + 1) of 2 — part of a multi-step task", systemImage: "link")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 Section("Details") {

@@ -18,6 +18,11 @@ struct ExtractedTask: Sendable {
     var priority: TaskPriority?
     var category: TaskCategory?
     var dateConfidence: Double
+    // Set when this task was split off a line via a sequential connector ("and then"/"und dann")
+    // rather than a plain "and" — signals the two tasks are dependent steps, not independent
+    // to-dos. groupID is shared by both; sequenceIndex is this task's 0-based position in the pair.
+    var groupID: UUID? = nil
+    var sequenceIndex: Int? = nil
 }
 
 // MARK: - Per-language rule table (prd-update-02.md §2)
@@ -52,6 +57,7 @@ struct LanguageRules: Sendable {
     let categoryKeywords: [TaskCategory: [String]]
     let connectorWords: [String]                  // leftover words to trim from title edges after stripping a date phrase
     let conjunctionWords: [String]                // words meaning "and", used for line splitting
+    let sequentialWords: [String]                  // words meaning "then" — marks a split as dependent/sequential rather than two independent tasks
     let imperativeVerbs: Set<String>               // first-word check for splitting
     let verbSuffixes: [String]                     // last-word suffix check for splitting (e.g. German/Dutch "-en", Polish "-ć")
 }
@@ -88,14 +94,15 @@ struct RuleBasedExtractionService: Sendable {
         // The whole-line guess is still what drives the split decision itself, since we don't
         // know the sub-lines yet at that point.
         let splitRulesList = candidateRules(for: line, primaryLanguageCode: primaryLanguageCode)
-        let subLines = splitConjunctions(line, rulesList: splitRulesList)
+        let (subLines, isSequential) = splitConjunctions(line, rulesList: splitRulesList)
+        let groupID: UUID? = (isSequential && subLines.count > 1) ? UUID() : nil
 
         // A run-on line usually states its date once, up front — "shopping tomorrow and painting
         // in the evening" means both happen tomorrow, not that the second clause has no date at
         // all. A later clause with no date of its own inherits the nearest earlier clause's date.
         var carryDate: (dueDate: String, confidence: Double)?
         var tasks: [ExtractedTask] = []
-        for subLine in subLines {
+        for (index, subLine) in subLines.enumerated() {
             let rulesList = candidateRules(for: subLine, primaryLanguageCode: primaryLanguageCode)
             var task = buildTask(from: subLine, referenceDate: referenceDate, rulesList: rulesList)
             if task.dueDate == nil, let carryDate {
@@ -104,6 +111,8 @@ struct RuleBasedExtractionService: Sendable {
             } else if let date = task.dueDate {
                 carryDate = (date, task.dateConfidence)
             }
+            task.groupID = groupID
+            task.sequenceIndex = groupID != nil ? index : nil
             tasks.append(task)
         }
         return tasks
@@ -194,19 +203,33 @@ struct RuleBasedExtractionService: Sendable {
 
     // MARK: - Line splitting on conjunctions (§3)
 
-    private func splitConjunctions(_ line: String, rulesList: [LanguageRules]) -> [String] {
+    private func splitConjunctions(_ line: String, rulesList: [LanguageRules]) -> (subLines: [String], isSequential: Bool) {
         let conjunctions = Set(rulesList.flatMap(\.conjunctionWords))
+        let sequentialWords = Set(rulesList.flatMap(\.sequentialWords))
         for word in conjunctions {
             let separator = " \(word) "
             guard let range = line.range(of: separator, options: .caseInsensitive) else { continue }
             let before = String(line[line.startIndex..<range.lowerBound]).trimmingCharacters(in: .whitespaces)
-            let after = String(line[range.upperBound...]).trimmingCharacters(in: .whitespaces)
+            var after = String(line[range.upperBound...]).trimmingCharacters(in: .whitespaces)
+
+            // "and then"/"und dann" signals the second clause depends on the first ("adjust the
+            // laptop, then inform Martin about it") rather than being an unrelated second task.
+            // Strip the marker itself so it doesn't linger at the front of the resulting title.
+            var isSequential = false
+            for marker in sequentialWords {
+                let prefix = "\(marker) "
+                guard after.lowercased().hasPrefix(prefix) else { continue }
+                after = String(after.dropFirst(prefix.count)).trimmingCharacters(in: .whitespaces)
+                isSequential = true
+                break
+            }
+
             guard before.split(separator: " ").count >= 2,
                   after.split(separator: " ").count >= 2,
                   containsVerb(before, rulesList: rulesList), containsVerb(after, rulesList: rulesList) else { continue }
-            return [before, after]
+            return ([before, after], isSequential)
         }
-        return [line]
+        return ([line], false)
     }
 
     // Curated per-language verb signals are checked before NLTagger, which is unreliable on 2-3
@@ -505,7 +528,13 @@ struct RuleBasedExtractionService: Sendable {
     private func cleanTitle(_ text: String, fallback: String, rulesList: [LanguageRules]) -> String {
         let connectors = Self.universalConnectors.union(rulesList.flatMap(\.connectorWords).map { $0.lowercased() })
 
-        var cleaned = text.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+        // Stripping a matched date/time phrase from the middle of a sentence (e.g. "arzttermin
+        // <später>, muss...") often leaves an orphaned comma that trimming edges alone won't
+        // catch, since it's no longer at the start/end once the phrase around it is gone. Commas
+        // rarely carry meaning in a short task title, so just drop them outright rather than only
+        // trimming the string's own edges.
+        var cleaned = text.replacingOccurrences(of: ",", with: "")
+        cleaned = cleaned.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
         cleaned = cleaned.trimmingCharacters(in: CharacterSet(charactersIn: " ,–—-:;."))
 
         var words = cleaned.split(separator: " ").map(String.init)
@@ -575,11 +604,13 @@ extension RuleBasedExtractionService {
         ],
         connectorWords: ["on", "at", "by", "for", "this", "next", "am"],
         conjunctionWords: ["and"],
+        sequentialWords: ["then"],
         imperativeVerbs: [
             "call", "buy", "finish", "deploy", "write", "prepare", "book", "pay", "clean", "reply",
             "send", "schedule", "review", "fix", "renew", "cancel", "water", "tidy", "return", "pick",
             "think", "do", "get", "make", "take", "bring", "check", "confirm", "submit", "order",
             "drop", "pack", "email", "text", "message", "update", "install", "download", "upload",
+            "inform", "adjust", "notify", "tell", "ask", "arrange",
         ],
         verbSuffixes: []
     )
@@ -611,12 +642,16 @@ extension RuleBasedExtractionService {
         ],
         categoryKeywords: [
             .work: ["büro", "arbeit", "projekt", "kickoff"],
-            .health: ["arzt", "zahnarzt", "termin", "fitness"],
+            // German compounds nouns without a space ("Arzttermin"), so a bare "arzt" keyword
+            // never matches inside it — \b requires a boundary, and there isn't one mid-compound.
+            // Listing the common compounds directly is the only reliable fix for this pattern.
+            .health: ["arzt", "arzttermin", "arztbesuch", "hausarzt", "frauenarzt", "zahnarzt", "termin", "fitness"],
             .shopping: ["kaufen", "einkaufen"],
             .finance: ["rechnung", "bezahlen", "steuer"],
         ],
         connectorWords: ["am", "um", "den", "der", "die", "das", "für", "zu", "zur"],
         conjunctionWords: ["und"],
+        sequentialWords: ["dann"],
         imperativeVerbs: [],
         verbSuffixes: ["en"]
     )
@@ -653,6 +688,7 @@ extension RuleBasedExtractionService {
         ],
         connectorWords: ["à", "de", "le", "la"],
         conjunctionWords: ["et"],
+        sequentialWords: ["puis"],
         imperativeVerbs: [
             "appeler", "acheter", "finir", "préparer", "réserver", "payer", "nettoyer", "répondre",
             "envoyer", "planifier", "réviser", "réparer", "renouveler", "annuler", "arroser",
@@ -696,6 +732,7 @@ extension RuleBasedExtractionService {
         ],
         connectorWords: ["a", "el", "la", "las"],
         conjunctionWords: ["y"],
+        sequentialWords: ["luego"],
         imperativeVerbs: [
             "llamar", "comprar", "terminar", "preparar", "reservar", "pagar", "limpiar", "responder",
             "enviar", "programar", "revisar", "arreglar", "renovar", "cancelar", "regar", "ordenar",
@@ -736,6 +773,7 @@ extension RuleBasedExtractionService {
         ],
         connectorWords: ["a", "il", "la", "lo"],
         conjunctionWords: ["e"],
+        sequentialWords: ["poi"],
         imperativeVerbs: [
             "chiamare", "comprare", "finire", "preparare", "prenotare", "pagare", "pulire",
             "rispondere", "inviare", "programmare", "rivedere", "riparare", "rinnovare",
@@ -777,6 +815,7 @@ extension RuleBasedExtractionService {
         ],
         connectorWords: ["a", "o", "às", "de"],
         conjunctionWords: ["e"],
+        sequentialWords: ["depois"],
         imperativeVerbs: [
             "ligar", "comprar", "terminar", "preparar", "reservar", "pagar", "limpar", "responder",
             "enviar", "agendar", "revisar", "consertar", "renovar", "cancelar", "regar", "arrumar",
@@ -817,6 +856,7 @@ extension RuleBasedExtractionService {
         ],
         connectorWords: ["op", "om", "de", "het"],
         conjunctionWords: ["en"],
+        sequentialWords: ["dan"],
         imperativeVerbs: [
             "bellen", "kopen", "afmaken", "voorbereiden", "boeken", "betalen", "schoonmaken",
             "antwoorden", "sturen", "plannen", "controleren", "repareren", "verlengen",
@@ -858,6 +898,7 @@ extension RuleBasedExtractionService {
         ],
         connectorWords: ["w", "na", "o"],
         conjunctionWords: ["i"],
+        sequentialWords: ["potem"],
         imperativeVerbs: [
             "zadzwonić", "kupić", "skończyć", "przygotować", "zarezerwować", "zapłacić",
             "posprzątać", "odpowiedzieć", "wysłać", "zaplanować", "sprawdzić", "naprawić",

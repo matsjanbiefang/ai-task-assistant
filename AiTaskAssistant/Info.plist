@@ -42,6 +42,11 @@
 	<string>Used to capture tasks by voice so you can add them hands-free.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Speech is transcribed on-device to convert your voice into a task.</string>
+	<!-- No custom cryptography beyond standard OS-provided HTTPS/on-device frameworks — declaring
+	     this here skips the "Missing Compliance" export-compliance prompt App Store Connect would
+	     otherwise ask about manually on every single build. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<!-- M3: Deep-link URL scheme for notification taps -->
 	<key>CFBundleURLTypes</key>
 	<array>

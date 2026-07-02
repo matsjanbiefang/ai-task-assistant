@@ -752,3 +752,115 @@ a target task ID and scroll to it; out of scope for this pass.
 verification-gap caveat as Milestone 1 — none of the interaction/visual changes have been seen
 running, only compiled. Bumped to build 4 for the next TestFlight round, which is what will
 actually answer whether these fixes feel right.
+
+---
+
+## TestFlight publishing: internal-only distribution fix — 2026-07-02
+
+Builds 4 and 5 both uploaded to App Store Connect successfully but Codemagic reported
+"post-processing failed" on both, for two different reasons in sequence:
+
+1. **Build 4**: `submit_to_testflight: true` alone made Codemagic also attempt external beta
+   review submission, which Apple rejects without Beta App Review contact info (name/phone/email)
+   filled in — the same wall hit back on build 3. Tried fixing with explicit `beta_groups: [Int]`.
+2. **Build 5**: that fix hit a *different*, harder error — "Cannot add internal group to a build."
+   Root cause (confirmed via Codemagic's own GitHub discussions): the "Int" internal TestFlight
+   group is set to **Automatic** distribution in App Store Connect (the default), and Apple's API
+   flatly refuses explicit group-assignment calls against an automatic-distribution group — that
+   assignment isn't needed in the first place, since automatic distribution means every processed
+   build already reaches internal testers with zero action required.
+
+Fixed by reverting to plain `submit_to_testflight: true` with no `beta_groups` — internal
+availability was actually already working the whole time via automatic distribution (confirmed:
+builds 3 and 4 both showed "Bereit zur Übermittlung" under the Int group in App Store Connect
+despite Codemagic's own "failed" status). Also added `ITSAppUsesNonExemptEncryption: false` to
+`Info.plist` so the "Missing Compliance" export-compliance prompt — which had been answered
+manually per-build — doesn't need answering again for every future build.
+
+---
+
+## Real-Device Feedback Round 2 — 2026-07-02
+
+Second round of feedback after testing builds 3/4 (before the round 1 fixes could even be
+verified — feedback arrived faster than the TestFlight publishing pipeline could be sorted out).
+Six items, addressed in commit alongside a build number bump to 6.
+
+**Mic crash still happening.** The round 1 fix (`.default` audio session mode + format guard)
+evidently wasn't the actual root cause, or wasn't the only one. Rather than guess a third time,
+asked the user to pull the actual crash log from Settings → Privacy & Security → Analytics &
+Improvements → Analytics Data — still pending, not yet fixed in this round.
+
+**Couldn't edit older lines (recurring, round 1's fix didn't hold).** Root cause was deeper than
+the deferred-focus-assignment fix addressed: `row(for:)` was an `if/else` that swapped between two
+structurally different views (a `Text`-in-`Button` and a `TextField`) based on focus state —
+SwiftUI's view-identity diffing across two different view *types* for the same list-item identity
+is exactly the kind of thing that can silently drop a focus request, deferred by one runloop tick
+or not. Restructured so the row *always* mounts a real `TextField` (never swapped out); the
+highlighted/struck-through display renders as a non-interactive (`allowsHitTesting(false)`)
+overlay on top while unfocused, with the real field's own text made invisible
+(`.foregroundStyle(.clear)`) so it doesn't show twice. Tapping to re-edit is now just the OS's
+ordinary text-field-tap-to-focus behavior — nothing SwiftUI-specific to race. This also fixed a
+latent data-loss bug: previously, tapping away from an edited line *without* pressing Return never
+committed the edit at all. Commits now happen from a single place — `onChange(of: focusedTarget)`
+at the body level, whenever focus transitions *away* from a `.line(id)` — so Return, tapping
+another line, tapping compose, and dismissing the keyboard all commit correctly through the same
+path instead of each needing its own commit call wired individually.
+
+**Tapping a note's task icon should jump straight to that task's edit screen**, not just the task
+list. `AssistantView` gained an `initialTask: TaskItem?` parameter; on appear, if set, it opens
+`TaskEditView` for that task immediately via the existing `.sheet(item:)`. `NoteView` tracks which
+task a tapped icon corresponds to (`allTasks.first { $0.sourceLineID == line.id }`) and passes it
+through; the calendar icon and bottom-bar tasks button explicitly clear it first, so they still
+open the plain list.
+
+**"Arzttermin" (compound noun) not categorized as health, and its trailing clauses ("Rezept
+denken", "Überweisung") wrongly read as separate header-level content.** The category miss was a
+straightforward gap: German compounds nouns without a space, so a bare `arzt` keyword's `\b`
+boundary check never matches inside `arzttermin` — added the compound directly
+(`arzttermin`/`arztbesuch`/`hausarzt`/`frauenarzt`) alongside the existing `zahnarzt` entry, same
+pattern. The "these are details, not separate header content" part is a genuinely harder problem —
+distinguishing a line's core subject from its supplementary elaboration needs something like a
+title/notes-body split, which doesn't exist in the schema at all yet. Scoped that out explicitly
+rather than attempting a fragile heuristic (e.g. "split on first comma") that would likely misfire
+on lines where the important part comes *after* the comma, same as this one does. Did fix the
+smaller, concrete side effect: removing a matched date word from mid-sentence used to leave a
+stray comma behind ("Arzttermin , muss..."); `cleanTitle` now strips commas outright rather than
+only trimming the string's edges.
+
+**Keyboard covering the input when scrolled down.** `focusedTarget` changes now also trigger
+`proxy.scrollTo` (same `ScrollViewReader` already used for scrolling to the compose row on new
+lines) — scrolling to the newly-focused line or the compose row whenever focus changes, so the
+active field can't end up hidden behind the keyboard.
+
+**"Adjust the laptop and then inform Martin about it" should be one dependent, multi-step task,
+not two unrelated ones.** Added a `sequentialWords` list per language ("then"/"dann"/"puis"/
+"luego"/"poi"/"depois"/"dan"/"potem") — checked in `splitConjunctions` after finding a plain "and"
+split point; if the second clause starts with the marker word, it's stripped and the split is
+flagged sequential. `ExtractedTask` gained `groupID`/`sequenceIndex`, `TaskItem` gained
+`linkedGroupID`/`sequenceIndex` to match, wired through in `NoteView.reparse`. `AssistantView` and
+`TaskEditView` show a small "Step N of 2" link indicator for tasks that carry a `linkedGroupID`.
+
+**No indicator of what got extracted (time/category/priority/linked).** Replaced the note row's
+generic task-count badge with a small icon row reflecting the actual extracted signals for that
+line's task(s): a clock if any has a due time, a category-specific icon (briefcase/heart/cart/
+dollar sign/person), a colored flag if a priority was set, and a link icon if the line produced a
+linked pair. Falls back to the existing low-confidence "?" when the engine wasn't sure about the
+date.
+
+**Also found and fixed while wiring the above:** `dueTime` was being extracted correctly by the
+engine (validated by the corpus for over a dozen cases) but was never actually passed into
+`TaskItem(...)` when creating tasks from a parsed line — the field existed on the model and in
+`TaskEditView`... except `TaskEditView` had no time-editing UI at all either. Both fixed: `NoteView
+.reparse` now combines the extracted "HH:mm" with the task's own due day into a proper `Date` via
+a new `parsedTime` helper, and `TaskEditView` gained a due-time `DatePicker` + toggle mirroring the
+existing due-date one. This means all of round 1's time-of-day extraction work ("mittags", "noon",
+etc.) was silently producing correct data that never reached the UI until now.
+
+Added corpus case 90 (Arzttermin comma-stripping) plus three standalone Swift Testing tests for
+things the corpus's own documented policy excludes from scoring (category, and the new group/
+sequence fields aren't part of `ExpectedTask`'s shape): `compoundGermanCategoryIsDetected`,
+`sequentialConnectorLinksSplitTasks`, `plainConjunctionDoesNotLinkSplitTasks`.
+
+**Status:** all changes made in this round are compiled-but-unverified pending a fresh CI run and
+a new TestFlight build (6). The mic crash fix is explicitly deferred pending the user's crash log —
+do not consider it fixed until that's confirmed.

@@ -49,10 +49,10 @@ workflows:
       app_store_connect:
         auth: integration
         submit_to_testflight: true
-        # Internal-only distribution (per explicit request) — without this, Codemagic also
-        # attempts to submit for external beta review, which Apple rejects until Beta App Review
-        # contact info (name/phone/email) is filled in on App Store Connect. "Int" is the exact
-        # name of the existing internal TestFlight group for this app.
-        beta_groups:
-          - Int
+        # Explicit beta_groups was tried for internal-only distribution but Apple's API rejects
+        # assigning builds to an internal group set to "Automatic" distribution (the default) —
+        # "Cannot add internal group to a build". Automatic distribution means every processed
+        # build already reaches internal testers with zero action needed here, so no beta_groups
+        # config is required (or usable) for that. A group would need "Manual" distribution
+        # enabled in App Store Connect before it could ever be targeted explicitly this way.
         submit_to_app_store: false

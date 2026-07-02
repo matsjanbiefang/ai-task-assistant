@@ -468,4 +468,12 @@ let extractionCorpus: [CorpusCase] = [
     CorpusCase(id: 89, focus: .language, input: "noon call with the client", expected: [
         [ExpectedTask(title: "Call with the client", dueDate: nil, dueTime: "12:00", priority: nil)],
     ]),
+
+    // Real-device feedback round 2 (2026-07-02): a mid-sentence date word ("später") used to
+    // leave a stray comma behind once removed ("Arzttermin , muss..."); cleanTitle now strips
+    // commas outright. Category ("arzttermin" -> health) isn't scored here per this file's own
+    // policy — verified separately in ExtractionAccuracyTests.swift instead.
+    CorpusCase(id: 90, focus: .language, input: "arzttermin später, muss an mein rezept denken und an meine überweisung", expected: [
+        [ExpectedTask(title: "Arzttermin muss an mein rezept denken und an meine überweisung", dueDate: offsetDate(0), dueTime: nil, priority: nil)],
+    ]),
 ]
