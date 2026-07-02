@@ -11,6 +11,15 @@ struct TaskEditView: View {
             Form {
                 Section("Task") {
                     TextField("Title", text: $task.title)
+                    TextField("Place", text: Binding(
+                        get: { task.place ?? "" },
+                        set: { task.place = $0.isEmpty ? nil : $0 }
+                    ))
+                    TextField("Details", text: Binding(
+                        get: { task.details ?? "" },
+                        set: { task.details = $0.isEmpty ? nil : $0 }
+                    ), axis: .vertical)
+                    .lineLimit(1...4)
                 }
 
                 Section("Schedule") {

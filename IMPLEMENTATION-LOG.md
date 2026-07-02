@@ -864,3 +864,87 @@ sequence fields aren't part of `ExpectedTask`'s shape): `compoundGermanCategoryI
 **Status:** all changes made in this round are compiled-but-unverified pending a fresh CI run and
 a new TestFlight build (6). The mic crash fix is explicitly deferred pending the user's crash log —
 do not consider it fixed until that's confirmed.
+
+---
+
+## Real-Device Feedback Round 3 — 2026-07-02
+
+Third feedback round. User approved a plan (saved at the time to
+`~/.claude/plans/lexical-sparking-summit.md`) after explicitly requesting a "detailed and larger
+rules" system for title/detail understanding — no API, no big local LLM, no extra costs.
+
+### Extraction engine: five-stage clause-classification pipeline
+
+**File:** `AiTaskAssistant/Services/RuleBasedExtractionService.swift` — restructured from "strip
+signals, keep the rest" into: normalize → segment into clauses → classify each clause's role →
+reduce the action clause to a head phrase → assemble. Seven new per-language `LanguageRules`
+fields (`fillerPrefixes`, `fillerWords`, `detailPatterns`, `detailContinuationPrefixes`,
+`referentialMarkers`, `titleReductionRules`, `placeKeywords`), populated for all 8 languages.
+
+- **Stage 1 — filler stripping:** ~15-25 modal/discourse phrases per language ("i need to",
+  "don't forget to", "ich muss unbedingt", "denk daran", trailing "bitte"/"please") stripped
+  iteratively longest-first from clause edges. Applied three times in `buildTask` — before
+  priority, after priority, and after date/time removal ("heute NOCH wäsche waschen" only
+  exposes its filler once "heute" is gone).
+- **Stage 2 — clause segmentation** (`segmentClauses`): splits on commas AND conjunctions,
+  keeping which separator produced each boundary plus the verbatim joiner text so clauses can be
+  rejoined losslessly when classification decides they were one clause after all.
+- **Stage 3 — role classification** (in `extractLine`): each clause becomes ACTION / SEQUENTIAL
+  ACTION / DETAIL. Details = full-clause detail patterns ("take … with me", "an … denken",
+  "… mitnehmen"), referential markers ("with me", "mit mir"), or a VERBLESS clause starting with
+  a detail-continuation preposition ("und an meine überweisung"). Verbless clauses NOT starting
+  with such a preposition rejoin the previous clause — that distinction is what keeps
+  "buy eggs and bread" one intact title while "und an meine überweisung" becomes a detail.
+  First clause is always an action. Sequential separators ("and then") win over detail rules —
+  the user stated sequencing explicitly.
+- **Stage 4 — head-phrase title reduction** (`reduceTitle`): ordered per-language rules that only
+  fire when the ENTIRE remaining clause matches, with two guards: capture ≤ 4 words and capture
+  must not itself contain a verb. The verb guard is what stops "abends zur wohnung streichen"
+  from reducing to place="wohnung streichen" while still letting "zum baumarkt" → "Baumarkt".
+- **Stage 5 — place extraction:** destination captures from Stage 4 take precedence; otherwise a
+  ~18-25-entry per-language place-keyword table scanned with word-START matching ("\barzt"
+  deliberately without a trailing \b so German compounds like "arzttermin" still hit).
+
+Robustness detail: clause classification and per-action extraction merge the whole LINE's
+candidate rules into each clause's own — short fragments ("an meine überweisung") are exactly
+where per-clause language detection is least reliable, and a misdetection must not flip a
+clause's classification.
+
+### Schema + UI
+
+- `ExtractedTask` and `TaskItem` gained `place: String?` and `details: String?` (defaulted —
+  SwiftData lightweight migration).
+- `NoteView.statusIcon` reworked per user request: clock and map-pin icons ALWAYS show for task
+  lines — crossed/dimmed variant (`clock.badge.xmark`, `mappin.slash`) when that signal was NOT
+  found, normal variant when it was. Details (`note.text`), link, category, priority icons appear
+  only when present.
+- **Direct task edit:** tapping a single-task line's indicator now opens `TaskEditView` directly
+  via a dedicated `.sheet(item: $editTask)` — the round-2 approach (AssistantView with an
+  onAppear-nested edit sheet) showed the list first, which the user explicitly didn't want.
+  Multi-task lines still open the list (no single editor to jump to). Reverted the `initialTask`
+  hack from `AssistantView`.
+- **Keyboard:** round-2's scroll-on-focus-change fired before the keyboard finished animating and
+  never fired while typing (focus doesn't change then). Now: scroll also on `composeText` change,
+  re-scroll on `keyboardDidShowNotification` (fires AFTER the animation, with final layout), and
+  `.scrollDismissesKeyboard(.interactively)`.
+- `TaskEditView` gained Place + Details fields; `AssistantView` rows show place (mappin label)
+  and details (caption line).
+
+### Tests
+
+Corpus grew to 100 cases: new 91-100 covering filler stripping in all 8 languages, destination
+title reduction (en "Hospital", de "Baumarkt"/"Arzt"), and detail-clause absorption (split count
+1 where round-2 would have produced 2 tasks or a polluted title). Three deliberate expectation
+changes, each documented inline per the corpus's own policy: case 16 + case 51 line 1 ("noch" is
+filler → "Wäsche waschen"), case 49 ("oh and also don't forget to" → "Water the plants"),
+case 90 (details out of the title → "Arzttermin"). Five new standalone tests for the unscored
+fields: place-from-destination, place-from-keyword, detail-not-split, verbless-continuation
+detail, coordinated-objects-stay-in-title — all with count guards (run-45 lesson).
+
+**Honest limitation, stated to the user in chat:** phrasing outside the hand-written tables falls
+back to the previous behavior (cleaned full text as title) — never worse, but not universal
+understanding. Apple's on-device Foundation Models remains the Milestone 5 answer for arbitrary
+phrasing.
+
+**Status:** compiled-but-unverified pending CI; bumped to build 7. Mic crash STILL open, pending
+the user's crash log.

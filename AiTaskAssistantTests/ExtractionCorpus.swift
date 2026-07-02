@@ -126,8 +126,10 @@ let extractionCorpus: [CorpusCase] = [
     CorpusCase(id: 15, focus: .language, input: "termin um 15 uhr", expected: [
         [ExpectedTask(title: "Termin", dueDate: offsetDate(0), dueTime: "15:00", priority: nil)],
     ]),
+    // Deliberate expectation change (feedback round 3): "noch" is a discourse filler, not part
+    // of the task — the filler-stripping stage now removes it, which is a strictly better title.
     CorpusCase(id: 16, focus: .language, input: "heute noch wäsche waschen", expected: [
-        [ExpectedTask(title: "Noch wäsche waschen", dueDate: offsetDate(0), dueTime: nil, priority: nil)],
+        [ExpectedTask(title: "Wäsche waschen", dueDate: offsetDate(0), dueTime: nil, priority: nil)],
     ]),
 
     // MARK: Run-on lines — conjunction splitting (§3)
@@ -282,8 +284,10 @@ let extractionCorpus: [CorpusCase] = [
     CorpusCase(id: 48, focus: .dates, input: "clean the car this weekend", expected: [
         [ExpectedTask(title: "Clean the car this weekend", dueDate: nil, dueTime: nil, priority: nil)],
     ]),
+    // Deliberate expectation change (feedback round 3): "oh and" / "also" / "don't forget to"
+    // are all discourse/modal fillers now stripped by Stage 1 — the task is watering the plants.
     CorpusCase(id: 49, focus: .noDate, input: "oh and also don't forget to water the plants", expected: [
-        [ExpectedTask(title: "Oh and also don't forget to water the plants", dueDate: nil, dueTime: nil, priority: nil)],
+        [ExpectedTask(title: "Water the plants", dueDate: nil, dueTime: nil, priority: nil)],
     ]),
     CorpusCase(id: 50, focus: .dates, input: "renew the gym membership in two days", expected: [
         [ExpectedTask(title: "Renew the gym membership", dueDate: offsetDate(2), dueTime: nil, priority: nil)],
@@ -293,7 +297,7 @@ let extractionCorpus: [CorpusCase] = [
     diesen samstag großeinkauf machen
     call max tomorrow and finish deck friday
     """, expected: [
-        [ExpectedTask(title: "Noch wäsche waschen", dueDate: offsetDate(0), dueTime: nil, priority: nil)],
+        [ExpectedTask(title: "Wäsche waschen", dueDate: offsetDate(0), dueTime: nil, priority: nil)],
         [ExpectedTask(title: "Großeinkauf machen", dueDate: nextWeekdayDate(saturday), dueTime: nil, priority: nil)],
         [
             ExpectedTask(title: "Call max", dueDate: offsetDate(1), dueTime: nil, priority: nil),
@@ -469,11 +473,44 @@ let extractionCorpus: [CorpusCase] = [
         [ExpectedTask(title: "Call with the client", dueDate: nil, dueTime: "12:00", priority: nil)],
     ]),
 
-    // Real-device feedback round 2 (2026-07-02): a mid-sentence date word ("später") used to
-    // leave a stray comma behind once removed ("Arzttermin , muss..."); cleanTitle now strips
-    // commas outright. Category ("arzttermin" -> health) isn't scored here per this file's own
-    // policy — verified separately in ExtractionAccuracyTests.swift instead.
+    // Feedback round 3 (deliberate expectation change from round 2): the clause-classification
+    // pipeline now recognizes "muss an mein rezept denken" and "an meine überweisung" as DETAIL
+    // clauses of the appointment, so the title is just the appointment itself. The details
+    // string and place/category aren't part of ExpectedTask's scored shape — verified in
+    // standalone tests in ExtractionAccuracyTests.swift instead.
     CorpusCase(id: 90, focus: .language, input: "arzttermin später, muss an mein rezept denken und an meine überweisung", expected: [
-        [ExpectedTask(title: "Arzttermin muss an mein rezept denken und an meine überweisung", dueDate: offsetDate(0), dueTime: nil, priority: nil)],
+        [ExpectedTask(title: "Arzttermin", dueDate: offsetDate(0), dueTime: nil, priority: nil)],
+    ]),
+
+    // MARK: Feedback round 3 — filler stripping, head-phrase title reduction, detail clauses
+    CorpusCase(id: 91, focus: .titles, input: "i need to go to the hospital tomorrow", expected: [
+        [ExpectedTask(title: "Hospital", dueDate: offsetDate(1), dueTime: nil, priority: nil)],
+    ]),
+    CorpusCase(id: 92, focus: .titles, input: "ich muss morgen zum baumarkt", expected: [
+        [ExpectedTask(title: "Baumarkt", dueDate: offsetDate(1), dueTime: nil, priority: nil)],
+    ]),
+    CorpusCase(id: 93, focus: .splitting, input: "go to the doctor and take my recipes with me", expected: [
+        [ExpectedTask(title: "Doctor", dueDate: nil, dueTime: nil, priority: nil)],
+    ]),
+    CorpusCase(id: 94, focus: .splitting, input: "zum arzt gehen und meine unterlagen mitnehmen", expected: [
+        [ExpectedTask(title: "Arzt", dueDate: nil, dueTime: nil, priority: nil)],
+    ]),
+    CorpusCase(id: 95, focus: .titles, input: "je dois payer la facture demain", expected: [
+        [ExpectedTask(title: "Payer la facture", dueDate: offsetDate(1), dueTime: nil, priority: nil)],
+    ]),
+    CorpusCase(id: 96, focus: .titles, input: "tengo que llamar a max mañana", expected: [
+        [ExpectedTask(title: "Llamar a max", dueDate: offsetDate(1), dueTime: nil, priority: nil)],
+    ]),
+    CorpusCase(id: 97, focus: .titles, input: "devo pagare la fattura domani", expected: [
+        [ExpectedTask(title: "Pagare la fattura", dueDate: offsetDate(1), dueTime: nil, priority: nil)],
+    ]),
+    CorpusCase(id: 98, focus: .titles, input: "tenho que ligar para o max amanhã", expected: [
+        [ExpectedTask(title: "Ligar para o max", dueDate: offsetDate(1), dueTime: nil, priority: nil)],
+    ]),
+    CorpusCase(id: 99, focus: .titles, input: "ik moet morgen de factuur betalen", expected: [
+        [ExpectedTask(title: "Factuur betalen", dueDate: offsetDate(1), dueTime: nil, priority: nil)],
+    ]),
+    CorpusCase(id: 100, focus: .titles, input: "muszę jutro zapłacić fakturę", expected: [
+        [ExpectedTask(title: "Zapłacić fakturę", dueDate: offsetDate(1), dueTime: nil, priority: nil)],
     ]),
 ]

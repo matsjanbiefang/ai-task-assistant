@@ -23,6 +23,19 @@ struct ExtractedTask: Sendable {
     // to-dos. groupID is shared by both; sequenceIndex is this task's 0-based position in the pair.
     var groupID: UUID? = nil
     var sequenceIndex: Int? = nil
+    // Feedback round 3: where the task happens (destination capture or place keyword), and
+    // supplementary detail clauses ("take my recipes with me") that belong inside the task
+    // rather than in its title or as a separate task.
+    var place: String? = nil
+    var details: String? = nil
+}
+
+// Feedback round 3 (§Stage 4): reduces a full action clause to its head phrase when the WHOLE
+// clause matches — "go to the hospital" -> "Hospital". `template`'s "$1" is replaced with capture
+// group 1, which also becomes the task's place.
+struct TitleReductionRule: Sendable {
+    let pattern: String
+    let template: String
 }
 
 // MARK: - Per-language rule table (prd-update-02.md §2)
@@ -55,6 +68,14 @@ struct LanguageRules: Sendable {
     let timeOfDayWords: [String: String]           // colloquial time-of-day word -> fixed "HH:mm" (e.g. German "mittags" -> "12:00")
     let priorityPrefixes: [(pattern: String, priority: TaskPriority)]
     let categoryKeywords: [TaskCategory: [String]]
+    // Feedback round 3 — clause-classification pipeline fields:
+    let placeKeywords: [String: String]            // lowercase keyword (word-start match) -> canonical place display value
+    let fillerPrefixes: [String]                   // modal/discourse lead-ins stripped from clause start ("i need to", "ich muss")
+    let fillerWords: [String]                      // discourse fillers stripped from clause edges ("also", "bitte", "nicht vergessen")
+    let detailPatterns: [String]                   // full-clause regexes marking a clause as a DETAIL of the previous action
+    let detailContinuationPrefixes: [String]       // a VERBLESS clause starting with one of these is a detail continuation ("an meine überweisung")
+    let referentialMarkers: [String]               // phrases referring back to the main action ("with me", "mit mir") -> detail
+    let titleReductionRules: [TitleReductionRule]  // full-clause head-phrase reductions ("go to the X" -> "X")
     let connectorWords: [String]                  // leftover words to trim from title edges after stripping a date phrase
     let conjunctionWords: [String]                // words meaning "and", used for line splitting
     let sequentialWords: [String]                  // words meaning "then" — marks a split as dependent/sequential rather than two independent tasks
@@ -88,23 +109,83 @@ struct RuleBasedExtractionService: Sendable {
     }
 
     func extractLine(_ line: String, referenceDate: Date = .now, primaryLanguageCode: String = "en") -> [ExtractedTask] {
-        // Language is re-detected per sub-line after splitting, not once for the whole line —
-        // a run-on line can genuinely mix languages either side of "and"/"und"/etc., and each
-        // half deserves its own best-guess candidate list for date/priority/category matching.
-        // The whole-line guess is still what drives the split decision itself, since we don't
-        // know the sub-lines yet at that point.
-        let splitRulesList = candidateRules(for: line, primaryLanguageCode: primaryLanguageCode)
-        let (subLines, isSequential) = splitConjunctions(line, rulesList: splitRulesList)
-        let groupID: UUID? = (isSequential && subLines.count > 1) ? UUID() : nil
+        // Feedback round 3: clause-classification pipeline. The line is segmented into clauses
+        // (commas + conjunctions), and each clause is classified by ROLE — action, sequential
+        // action, or detail — instead of the old binary "split or don't" decision. Details
+        // ("take my recipes with me", "an meine überweisung") attach to the nearest preceding
+        // action instead of polluting its title or becoming a bogus second task.
+        let lineRules = candidateRules(for: line, primaryLanguageCode: primaryLanguageCode)
+        let clauses = segmentClauses(line, rulesList: lineRules)
+
+        struct PendingAction {
+            var text: String
+            var sequential: Bool
+            var details: [String]
+        }
+        var actions: [PendingAction] = []
+        var sawSequential = false
+
+        for clause in clauses {
+            // Language is re-detected per clause — a run-on line can genuinely mix languages
+            // either side of "and"/"und". The WHOLE line's rules are appended as a fallback:
+            // short fragments ("an meine überweisung") are exactly where per-clause detection
+            // is least reliable, and misdetecting one must not break its classification.
+            var clauseRules = candidateRules(for: clause.text, primaryLanguageCode: primaryLanguageCode)
+            for rules in lineRules where !clauseRules.contains(where: { $0.code == rules.code }) {
+                clauseRules.append(rules)
+            }
+            guard !actions.isEmpty else {
+                // The first clause is always an action — a line means *something* to do.
+                actions.append(PendingAction(text: clause.text, sequential: false, details: []))
+                continue
+            }
+            if clause.separator == .sequential {
+                // Explicit "and then" — the user stated sequencing; that wins over detail rules.
+                if clause.text.split(separator: " ").count >= 2, containsVerb(clause.text, rulesList: clauseRules) {
+                    actions.append(PendingAction(text: clause.text, sequential: true, details: []))
+                    sawSequential = true
+                } else {
+                    actions[actions.count - 1].text += clause.joinerText + clause.text
+                }
+                continue
+            }
+            if isDetailClause(clause.text, rulesList: clauseRules) {
+                actions[actions.count - 1].details.append(clause.text)
+                continue
+            }
+            let isVerby = containsVerb(clause.text, rulesList: clauseRules)
+            if !isVerby {
+                if startsWithDetailContinuation(clause.text, rulesList: clauseRules) {
+                    // Verbless prepositional continuation ("und an meine überweisung") — a
+                    // detail of the previous action, not part of its title.
+                    actions[actions.count - 1].details.append(clause.text)
+                } else {
+                    // Coordinated objects ("buy eggs AND BREAD") — stays in the same clause.
+                    actions[actions.count - 1].text += clause.joinerText + clause.text
+                }
+                continue
+            }
+            if clause.text.split(separator: " ").count >= 2,
+               actions[actions.count - 1].text.split(separator: " ").count >= 2 {
+                actions.append(PendingAction(text: clause.text, sequential: false, details: []))
+            } else {
+                actions[actions.count - 1].text += clause.joinerText + clause.text
+            }
+        }
+
+        let groupID: UUID? = (sawSequential && actions.count > 1) ? UUID() : nil
 
         // A run-on line usually states its date once, up front — "shopping tomorrow and painting
         // in the evening" means both happen tomorrow, not that the second clause has no date at
         // all. A later clause with no date of its own inherits the nearest earlier clause's date.
         var carryDate: (dueDate: String, confidence: Double)?
         var tasks: [ExtractedTask] = []
-        for (index, subLine) in subLines.enumerated() {
-            let rulesList = candidateRules(for: subLine, primaryLanguageCode: primaryLanguageCode)
-            var task = buildTask(from: subLine, referenceDate: referenceDate, rulesList: rulesList)
+        for (index, action) in actions.enumerated() {
+            var rulesList = candidateRules(for: action.text, primaryLanguageCode: primaryLanguageCode)
+            for rules in lineRules where !rulesList.contains(where: { $0.code == rules.code }) {
+                rulesList.append(rules)
+            }
+            var task = buildTask(from: action.text, referenceDate: referenceDate, rulesList: rulesList, detailClauses: action.details)
             if task.dueDate == nil, let carryDate {
                 task.dueDate = carryDate.dueDate
                 task.dateConfidence = carryDate.confidence
@@ -127,8 +208,11 @@ struct RuleBasedExtractionService: Sendable {
 
     // MARK: - Per-sub-line task assembly
 
-    private func buildTask(from rawSubLine: String, referenceDate: Date, rulesList: [LanguageRules]) -> ExtractedTask {
-        var text = rawSubLine
+    private func buildTask(from rawSubLine: String, referenceDate: Date, rulesList: [LanguageRules], detailClauses: [String] = []) -> ExtractedTask {
+        // Stage 1: modal/discourse filler stripping ("i need to", "ich muss", trailing "bitte")
+        // before anything else, and again after priority stripping — "dringend: ich muss..." and
+        // "ich muss dringend..." both need to end up clean.
+        var text = stripFillers(rawSubLine, rulesList: rulesList)
 
         var priority: TaskPriority?
         (text, priority) = stripBangPriority(text)
@@ -140,6 +224,7 @@ struct RuleBasedExtractionService: Sendable {
                 break
             }
         }
+        text = stripFillers(text, rulesList: rulesList)
 
         var category: TaskCategory?
         for rules in rulesList {
@@ -180,8 +265,27 @@ struct RuleBasedExtractionService: Sendable {
             }
         }
 
-        let stripped = removeRanges(rangesToStrip, from: text)
-        let title = cleanTitle(stripped, fallback: rawSubLine, rulesList: rulesList)
+        // Fillers again after date/time removal: "heute NOCH wäsche waschen" only exposes its
+        // leading "noch" once "heute" is gone.
+        let stripped = stripFillers(removeRanges(rangesToStrip, from: text), rulesList: rulesList)
+
+        // Stage 4: head-phrase reduction ("go to the hospital" -> "Hospital") + Stage 5: place.
+        var place: String?
+        let title: String
+        if let reduced = reduceTitle(normalizeClause(stripped), rulesList: rulesList) {
+            title = capitalizeFirst(reduced.title)
+            place = capitalizeFirst(reduced.place)
+        } else {
+            title = cleanTitle(stripped, fallback: rawSubLine, rulesList: rulesList)
+        }
+        if place == nil {
+            place = placeKeywordMatch(in: rawSubLine, rulesList: rulesList)
+        }
+
+        let cleanedDetails = detailClauses
+            .map { capitalizeFirst(stripFillers(normalizeClause($0), rulesList: rulesList)) }
+            .filter { !$0.isEmpty }
+        let details = cleanedDetails.isEmpty ? nil : cleanedDetails.joined(separator: "; ")
 
         return ExtractedTask(
             title: title,
@@ -189,8 +293,107 @@ struct RuleBasedExtractionService: Sendable {
             dueTime: dueTime,
             priority: priority,
             category: category,
-            dateConfidence: dateFound ? confidence : 1.0
+            dateConfidence: dateFound ? confidence : 1.0,
+            place: place,
+            details: details
         )
+    }
+
+    // MARK: - Fillers, title reduction, place (feedback round 3)
+
+    private func stripFillers(_ text: String, rulesList: [LanguageRules]) -> String {
+        let prefixes = rulesList.flatMap(\.fillerPrefixes).sorted { $0.count > $1.count }
+        let edgeWords = rulesList.flatMap(\.fillerWords).sorted { $0.count > $1.count }
+        let boundaryTrim = CharacterSet(charactersIn: " :,–—-")
+
+        var result = text.trimmingCharacters(in: .whitespaces)
+        var changed = true
+        while changed && !result.isEmpty {
+            changed = false
+            for prefix in prefixes {
+                guard let match = result.range(of: prefix, options: [.caseInsensitive, .anchored]) else { continue }
+                // word boundary required: end of clause, or a separator character
+                if match.upperBound == result.endIndex {
+                    result = ""
+                } else {
+                    let next = result[match.upperBound]
+                    guard next == " " || next == ":" || next == "," || next == "-" else { continue }
+                    result = String(result[match.upperBound...]).trimmingCharacters(in: boundaryTrim)
+                }
+                changed = true
+                break
+            }
+            if changed { continue }
+            for word in edgeWords {
+                if let match = result.range(of: word + " ", options: [.caseInsensitive, .anchored]) {
+                    result = String(result[match.upperBound...]).trimmingCharacters(in: .whitespaces)
+                    changed = true
+                    break
+                }
+                if let match = result.range(of: " " + word, options: [.caseInsensitive, .anchored, .backwards]),
+                   match.upperBound == result.endIndex {
+                    result = String(result[..<match.lowerBound]).trimmingCharacters(in: .whitespaces)
+                    changed = true
+                    break
+                }
+            }
+        }
+        // A clause that is ALL filler ("nicht vergessen") keeps its original text — an empty
+        // title helps nobody, and cleanTitle's fallback path expects something to work with.
+        return result.isEmpty ? text.trimmingCharacters(in: .whitespaces) : result
+    }
+
+    private func normalizeClause(_ text: String) -> String {
+        var cleaned = text.replacingOccurrences(of: ",", with: " ")
+        cleaned = cleaned.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+        return cleaned.trimmingCharacters(in: CharacterSet(charactersIn: " ,–—-:;.!?"))
+    }
+
+    private func capitalizeFirst(_ text: String) -> String {
+        guard let first = text.first else { return text }
+        return first.uppercased() + text.dropFirst()
+    }
+
+    // Stage 4: the WHOLE remaining clause must match a reduction pattern — partial matches never
+    // fire, so ordinary titles ("call the dentist") can't be damaged. The capture is rejected if
+    // it still contains a verb ("zur wohnung streichen" must NOT reduce to "wohnung streichen"
+    // with a place of a whole activity), falling back to the normal cleanTitle path.
+    private func reduceTitle(_ text: String, rulesList: [LanguageRules]) -> (title: String, place: String)? {
+        guard !text.isEmpty else { return nil }
+        let nsText = text as NSString
+        let fullRange = NSRange(location: 0, length: nsText.length)
+        for rules in rulesList {
+            for rule in rules.titleReductionRules {
+                guard let regex = try? NSRegularExpression(pattern: rule.pattern, options: [.caseInsensitive]),
+                      let match = regex.firstMatch(in: text, range: fullRange),
+                      match.range.location == 0, match.range.length == nsText.length,
+                      match.numberOfRanges > 1,
+                      let captureRange = Range(match.range(at: 1), in: text) else { continue }
+                let capture = String(text[captureRange]).trimmingCharacters(in: .whitespaces)
+                guard !capture.isEmpty,
+                      capture.split(separator: " ").count <= 4,
+                      !containsVerb(capture, rulesList: rulesList) else { continue }
+                let title = rule.template.replacingOccurrences(of: "$1", with: capture)
+                return (title, capture)
+            }
+        }
+        return nil
+    }
+
+    // Stage 5: place from keyword scan (destination captures from reduceTitle take precedence at
+    // the call site). Word-START matching ("\barzt") deliberately, so German compounds like
+    // "arzttermin" still hit "arzt" — a \b on both sides can never match inside a compound.
+    private func placeKeywordMatch(in text: String, rulesList: [LanguageRules]) -> String? {
+        let lower = text.lowercased()
+        for rules in rulesList {
+            for (keyword, canonical) in rules.placeKeywords.sorted(by: { $0.key.count > $1.key.count }) {
+                let pattern = "\\b\(NSRegularExpression.escapedPattern(for: keyword))"
+                if lower.range(of: pattern, options: .regularExpression) != nil {
+                    return canonical
+                }
+            }
+        }
+        return nil
     }
 
     // MARK: - Language detection (§2)
@@ -201,35 +404,113 @@ struct RuleBasedExtractionService: Sendable {
         return recognizer.dominantLanguage ?? .english
     }
 
-    // MARK: - Line splitting on conjunctions (§3)
+    // MARK: - Clause segmentation + role classification (§3, feedback round 3)
 
-    private func splitConjunctions(_ line: String, rulesList: [LanguageRules]) -> (subLines: [String], isSequential: Bool) {
-        let conjunctions = Set(rulesList.flatMap(\.conjunctionWords))
-        let sequentialWords = Set(rulesList.flatMap(\.sequentialWords))
-        for word in conjunctions {
-            let separator = " \(word) "
-            guard let range = line.range(of: separator, options: .caseInsensitive) else { continue }
-            let before = String(line[line.startIndex..<range.lowerBound]).trimmingCharacters(in: .whitespaces)
-            var after = String(line[range.upperBound...]).trimmingCharacters(in: .whitespaces)
+    private enum ClauseSeparator {
+        case leading      // first clause of the line
+        case comma
+        case conjunction  // "and"/"und"/...
+        case sequential   // "and then"/"und dann"/", dann"
+    }
 
-            // "and then"/"und dann" signals the second clause depends on the first ("adjust the
-            // laptop, then inform Martin about it") rather than being an unrelated second task.
-            // Strip the marker itself so it doesn't linger at the front of the resulting title.
-            var isSequential = false
-            for marker in sequentialWords {
-                let prefix = "\(marker) "
-                guard after.lowercased().hasPrefix(prefix) else { continue }
-                after = String(after.dropFirst(prefix.count)).trimmingCharacters(in: .whitespaces)
-                isSequential = true
-                break
+    private struct Clause {
+        var text: String
+        let separator: ClauseSeparator
+        let joinerText: String  // verbatim joiner, for rejoining clauses that turn out to be one
+    }
+
+    private func segmentClauses(_ line: String, rulesList: [LanguageRules]) -> [Clause] {
+        let conjunctions = Set(rulesList.flatMap(\.conjunctionWords).map { $0.lowercased() })
+        let sequentials = Set(rulesList.flatMap(\.sequentialWords).map { $0.lowercased() })
+
+        func stripLeadingWord(_ text: inout String, from words: Set<String>) -> String? {
+            let lower = text.lowercased()
+            for word in words where lower.hasPrefix(word + " ") {
+                text = String(text.dropFirst(word.count + 1)).trimmingCharacters(in: .whitespaces)
+                return word
+            }
+            return nil
+        }
+
+        var clauses: [Clause] = []
+        for (partIndex, rawPart) in line.components(separatedBy: ",").enumerated() {
+            var part = rawPart.trimmingCharacters(in: .whitespaces)
+            guard !part.isEmpty else { continue }
+
+            var separator: ClauseSeparator = partIndex == 0 ? .leading : .comma
+            var joiner = partIndex == 0 ? "" : ", "
+            // ", und X" / ", dann X" — the comma part itself starts with a connector word
+            if let conj = stripLeadingWord(&part, from: conjunctions) {
+                joiner += conj + " "
+                separator = .conjunction
+            }
+            if let seq = stripLeadingWord(&part, from: sequentials) {
+                joiner += seq + " "
+                separator = .sequential
             }
 
-            guard before.split(separator: " ").count >= 2,
-                  after.split(separator: " ").count >= 2,
-                  containsVerb(before, rulesList: rulesList), containsVerb(after, rulesList: rulesList) else { continue }
-            return ([before, after], isSequential)
+            // Split the remainder on inner " and "/" und " occurrences, left to right.
+            var remaining = part
+            var currentSeparator = separator
+            var currentJoiner = joiner
+            while true {
+                var earliest: (range: Range<String.Index>, word: String)?
+                for word in conjunctions {
+                    guard let r = remaining.range(of: " \(word) ", options: .caseInsensitive) else { continue }
+                    if earliest == nil || r.lowerBound < earliest!.range.lowerBound {
+                        earliest = (r, word)
+                    }
+                }
+                guard let found = earliest else { break }
+                let before = String(remaining[..<found.range.lowerBound]).trimmingCharacters(in: .whitespaces)
+                var after = String(remaining[found.range.upperBound...]).trimmingCharacters(in: .whitespaces)
+                var nextSeparator: ClauseSeparator = .conjunction
+                var nextJoiner = " \(found.word) "
+                if let seq = stripLeadingWord(&after, from: sequentials) {
+                    nextJoiner += seq + " "
+                    nextSeparator = .sequential
+                }
+                if !before.isEmpty {
+                    clauses.append(Clause(text: before, separator: currentSeparator, joinerText: currentJoiner))
+                }
+                currentSeparator = nextSeparator
+                currentJoiner = nextJoiner
+                remaining = after
+            }
+            if !remaining.isEmpty {
+                clauses.append(Clause(text: remaining, separator: currentSeparator, joinerText: currentJoiner))
+            }
         }
-        return ([line], false)
+        return clauses
+    }
+
+    // A clause is a DETAIL when it matches a full-clause detail pattern ("take … with me",
+    // "an … denken") or contains a referential marker pointing back at the main action.
+    private func isDetailClause(_ text: String, rulesList: [LanguageRules]) -> Bool {
+        let trimmed = normalizeClause(text)
+        guard !trimmed.isEmpty else { return false }
+        let nsText = trimmed as NSString
+        let fullRange = NSRange(location: 0, length: nsText.length)
+        for rules in rulesList {
+            for pattern in rules.detailPatterns {
+                guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+                      let match = regex.firstMatch(in: trimmed, range: fullRange),
+                      match.range.location == 0, match.range.length == nsText.length else { continue }
+                return true
+            }
+            for marker in rules.referentialMarkers {
+                let pattern = "\\b\(NSRegularExpression.escapedPattern(for: marker))\\b"
+                if trimmed.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+    private func startsWithDetailContinuation(_ text: String, rulesList: [LanguageRules]) -> Bool {
+        guard let first = text.split(separator: " ").first?.lowercased() else { return false }
+        return rulesList.contains { $0.detailContinuationPrefixes.contains(first) }
     }
 
     // Curated per-language verb signals are checked before NLTagger, which is unreliable on 2-3
@@ -598,9 +879,40 @@ extension RuleBasedExtractionService {
         ],
         categoryKeywords: [
             .work: ["work", "meeting", "deadline", "project", "client", "office", "kickoff"],
-            .health: ["doctor", "dentist", "gym", "workout", "appointment", "fitness", "membership"],
+            .health: ["doctor", "dentist", "gym", "workout", "appointment", "fitness", "membership", "hospital"],
             .shopping: ["buy", "groceries", "shopping", "store"],
             .finance: ["pay", "bill", "invoice", "bank", "tax"],
+        ],
+        placeKeywords: [
+            "hospital": "Hospital", "doctor": "Doctor", "dentist": "Dentist", "office": "Office",
+            "school": "School", "university": "University", "supermarket": "Supermarket",
+            "pharmacy": "Pharmacy", "bank": "Bank", "gym": "Gym", "station": "Station",
+            "airport": "Airport", "hairdresser": "Hairdresser", "garage": "Garage",
+            "kindergarten": "Kindergarten", "post office": "Post office", "bakery": "Bakery",
+            "restaurant": "Restaurant", "church": "Church", "library": "Library",
+            "town hall": "Town hall", "hardware store": "Hardware store",
+        ],
+        fillerPrefixes: [
+            "i need to", "i have to", "i must", "i should", "i want to", "i would like to",
+            "i wanna", "i gotta", "i'd like to", "i think i need to", "i really need to",
+            "we need to", "we have to", "we should", "need to", "have to", "gotta",
+            "remember to", "don't forget to", "dont forget to", "make sure to", "make sure i",
+            "note to self", "todo", "to-do", "maybe i should", "should probably",
+        ],
+        fillerWords: ["oh and", "and also", "also", "please", "btw"],
+        detailPatterns: [
+            #"^take\s+.+\s+with\s+(?:me|us)$"#,
+            #"^take\s+(?:my|your|our)\s+.+$"#,
+            #"^(?:bring|pack|grab)\s+.+$"#,
+            #"^remember\s+.+$"#,
+            #"^keep\s+in\s+mind\s+.+$"#,
+            #"^don'?t\s+forget\s+(?!to\s).+$"#,
+        ],
+        detailContinuationPrefixes: ["with", "for", "about", "plus"],
+        referentialMarkers: ["with me", "with us"],
+        titleReductionRules: [
+            TitleReductionRule(pattern: #"^(?:go|going|drive|head|walk|run|get)\s+(?:to|into)\s+(?:the\s+|a\s+|an\s+)?(.+)$"#, template: "$1"),
+            TitleReductionRule(pattern: #"^(?:doctor'?s?\s+)?appointment\s+(?:at|with)\s+(?:the\s+)?(.+)$"#, template: "Appointment: $1"),
         ],
         connectorWords: ["on", "at", "by", "for", "this", "next", "am"],
         conjunctionWords: ["and"],
@@ -649,9 +961,38 @@ extension RuleBasedExtractionService {
             // German compounds nouns without a space ("Arzttermin"), so a bare "arzt" keyword
             // never matches inside it — \b requires a boundary, and there isn't one mid-compound.
             // Listing the common compounds directly is the only reliable fix for this pattern.
-            .health: ["arzt", "arzttermin", "arztbesuch", "hausarzt", "frauenarzt", "zahnarzt", "termin", "fitness"],
+            .health: ["arzt", "arzttermin", "arztbesuch", "hausarzt", "frauenarzt", "zahnarzt", "termin", "fitness", "krankenhaus"],
             .shopping: ["kaufen", "einkaufen"],
             .finance: ["rechnung", "bezahlen", "steuer"],
+        ],
+        placeKeywords: [
+            "krankenhaus": "Krankenhaus", "klinik": "Klinik", "arzt": "Arzt", "zahnarzt": "Zahnarzt",
+            "praxis": "Praxis", "büro": "Büro", "schule": "Schule", "universität": "Universität",
+            "uni": "Uni", "supermarkt": "Supermarkt", "apotheke": "Apotheke", "bank": "Bank",
+            "fitnessstudio": "Fitnessstudio", "bahnhof": "Bahnhof", "flughafen": "Flughafen",
+            "baumarkt": "Baumarkt", "friseur": "Friseur", "werkstatt": "Werkstatt", "kita": "Kita",
+            "post": "Post", "bäcker": "Bäcker", "restaurant": "Restaurant", "kirche": "Kirche",
+            "bibliothek": "Bibliothek", "rathaus": "Rathaus",
+        ],
+        fillerPrefixes: [
+            "ich muss noch", "ich muss unbedingt", "ich muss mal", "ich muss", "ich müsste",
+            "ich sollte", "ich soll", "ich will", "ich möchte", "wir müssen", "wir sollten",
+            "man muss", "muss ich", "sollte ich", "muss", "denk daran", "daran denken",
+            "dran denken", "nicht vergessen", "nich vergessen", "ich darf nicht vergessen",
+        ],
+        fillerWords: ["bitte", "unbedingt", "noch", "mal", "auch noch", "ach ja", "übrigens", "nicht vergessen", "nich vergessen"],
+        detailPatterns: [
+            #"^(?:muss\s+|noch\s+)?an\s+.+\s+denken$"#,
+            #"^.+\s+(?:mitnehmen|mitbringen|einpacken|dabeihaben)$"#,
+            #"^.+\s+dabei\s+haben$"#,
+            #"^.+\s+nicht\s+vergessen$"#,
+            #"^.+\s+erwähnen$"#,
+        ],
+        detailContinuationPrefixes: ["an", "mit", "für", "wegen", "dazu", "außerdem"],
+        referentialMarkers: ["mit mir", "mit uns", "dabei"],
+        titleReductionRules: [
+            TitleReductionRule(pattern: #"^(?:geh(?:e|en)?\s+|fahr(?:e|en)?\s+|lauf(?:e|en)?\s+)?(?:zum|zur|zu|ins|in\s+die|in\s+den|nach|auf\s+die|aufs)\s+(.+?)(?:\s+(?:gehen|fahren|laufen))?$"#, template: "$1"),
+            TitleReductionRule(pattern: #"^termin\s+(?:beim|bei\s+der|bei|mit|im|in\s+der)\s+(.+)$"#, template: "Termin $1"),
         ],
         connectorWords: ["am", "um", "den", "der", "die", "das", "für", "zu", "zur"],
         conjunctionWords: ["und"],
@@ -689,6 +1030,28 @@ extension RuleBasedExtractionService {
             .health: ["médecin", "dentiste", "rendez-vous", "gym", "santé"],
             .shopping: ["acheter", "courses", "magasin"],
             .finance: ["payer", "facture", "banque", "impôts"],
+        ],
+        placeKeywords: [
+            "hôpital": "Hôpital", "médecin": "Médecin", "dentiste": "Dentiste", "bureau": "Bureau",
+            "école": "École", "université": "Université", "supermarché": "Supermarché",
+            "pharmacie": "Pharmacie", "banque": "Banque", "gare": "Gare", "aéroport": "Aéroport",
+            "coiffeur": "Coiffeur", "poste": "Poste", "boulangerie": "Boulangerie",
+            "restaurant": "Restaurant", "église": "Église", "bibliothèque": "Bibliothèque",
+        ],
+        fillerPrefixes: [
+            "je dois", "je devrais", "je voudrais", "je veux", "il faut", "il faudrait",
+            "nous devons", "on doit", "penser à", "ne pas oublier de", "n'oublie pas de",
+        ],
+        fillerWords: ["s'il te plaît", "svp", "aussi"],
+        detailPatterns: [
+            #"^(?:apporter|prendre)\s+.+$"#,
+            #"^penser\s+à\s+.+$"#,
+            #"^ne\s+pas\s+oublier\s+.+$"#,
+        ],
+        detailContinuationPrefixes: ["avec", "pour"],
+        referentialMarkers: ["avec moi", "avec nous"],
+        titleReductionRules: [
+            TitleReductionRule(pattern: #"^aller\s+(?:à\s+la\s+|à\s+l['’]|au\s+|aux\s+|chez\s+|à\s+|en\s+)(.+)$"#, template: "$1"),
         ],
         connectorWords: ["à", "de", "le", "la"],
         conjunctionWords: ["et"],
@@ -734,6 +1097,29 @@ extension RuleBasedExtractionService {
             .shopping: ["comprar", "compras", "tienda"],
             .finance: ["pagar", "factura", "banco", "impuestos"],
         ],
+        placeKeywords: [
+            "hospital": "Hospital", "médico": "Médico", "dentista": "Dentista", "oficina": "Oficina",
+            "escuela": "Escuela", "universidad": "Universidad", "supermercado": "Supermercado",
+            "farmacia": "Farmacia", "banco": "Banco", "gimnasio": "Gimnasio", "estación": "Estación",
+            "aeropuerto": "Aeropuerto", "peluquería": "Peluquería", "correos": "Correos",
+            "panadería": "Panadería", "restaurante": "Restaurante", "iglesia": "Iglesia",
+            "biblioteca": "Biblioteca",
+        ],
+        fillerPrefixes: [
+            "tengo que", "tenemos que", "debo", "debería", "hay que", "quiero", "necesito",
+            "acordarme de", "no olvidar", "no olvidarme de",
+        ],
+        fillerWords: ["por favor", "también"],
+        detailPatterns: [
+            #"^(?:llevar|traer)\s+.+$"#,
+            #"^acordar(?:me|se)\s+de\s+.+$"#,
+            #"^no\s+olvidar\s+.+$"#,
+        ],
+        detailContinuationPrefixes: ["con", "para"],
+        referentialMarkers: ["conmigo", "con nosotros"],
+        titleReductionRules: [
+            TitleReductionRule(pattern: #"^ir\s+(?:al\s+|a\s+la\s+|a\s+)(.+)$"#, template: "$1"),
+        ],
         connectorWords: ["a", "el", "la", "las"],
         conjunctionWords: ["y"],
         sequentialWords: ["luego"],
@@ -774,6 +1160,29 @@ extension RuleBasedExtractionService {
             .health: ["medico", "dentista", "appuntamento", "palestra", "salute"],
             .shopping: ["comprare", "spesa", "negozio"],
             .finance: ["pagare", "fattura", "banca", "tasse"],
+        ],
+        placeKeywords: [
+            "ospedale": "Ospedale", "medico": "Medico", "dentista": "Dentista", "ufficio": "Ufficio",
+            "scuola": "Scuola", "università": "Università", "supermercato": "Supermercato",
+            "farmacia": "Farmacia", "banca": "Banca", "palestra": "Palestra", "stazione": "Stazione",
+            "aeroporto": "Aeroporto", "parrucchiere": "Parrucchiere", "posta": "Posta",
+            "panetteria": "Panetteria", "ristorante": "Ristorante", "chiesa": "Chiesa",
+            "biblioteca": "Biblioteca",
+        ],
+        fillerPrefixes: [
+            "devo", "dovrei", "dobbiamo", "bisogna", "voglio", "ho bisogno di",
+            "ricordarmi di", "non dimenticare di",
+        ],
+        fillerWords: ["per favore", "anche"],
+        detailPatterns: [
+            #"^(?:portare|prendere)\s+.+$"#,
+            #"^ricordar(?:mi|si)\s+di\s+.+$"#,
+            #"^non\s+dimenticare\s+.+$"#,
+        ],
+        detailContinuationPrefixes: ["con", "per"],
+        referentialMarkers: ["con me", "con noi"],
+        titleReductionRules: [
+            TitleReductionRule(pattern: #"^andare\s+(?:al\s+|alla\s+|all['’]|dal\s+|da\s+|in\s+)(.+)$"#, template: "$1"),
         ],
         connectorWords: ["a", "il", "la", "lo"],
         conjunctionWords: ["e"],
@@ -817,6 +1226,29 @@ extension RuleBasedExtractionService {
             .shopping: ["comprar", "compras", "loja"],
             .finance: ["pagar", "fatura", "banco", "impostos"],
         ],
+        placeKeywords: [
+            "hospital": "Hospital", "médico": "Médico", "dentista": "Dentista",
+            "escritório": "Escritório", "escola": "Escola", "universidade": "Universidade",
+            "supermercado": "Supermercado", "farmácia": "Farmácia", "banco": "Banco",
+            "academia": "Academia", "estação": "Estação", "aeroporto": "Aeroporto",
+            "cabeleireiro": "Cabeleireiro", "correios": "Correios", "padaria": "Padaria",
+            "restaurante": "Restaurante", "igreja": "Igreja", "biblioteca": "Biblioteca",
+        ],
+        fillerPrefixes: [
+            "tenho que", "tenho de", "temos que", "devo", "deveria", "preciso", "quero",
+            "lembrar de", "não esquecer de",
+        ],
+        fillerWords: ["por favor", "também"],
+        detailPatterns: [
+            #"^(?:levar|trazer)\s+.+$"#,
+            #"^lembrar\s+de\s+.+$"#,
+            #"^não\s+esquecer\s+.+$"#,
+        ],
+        detailContinuationPrefixes: ["com", "para"],
+        referentialMarkers: ["comigo", "conosco"],
+        titleReductionRules: [
+            TitleReductionRule(pattern: #"^ir\s+(?:ao\s+|à\s+|para\s+o\s+|para\s+a\s+|para\s+)(.+)$"#, template: "$1"),
+        ],
         connectorWords: ["a", "o", "às", "de"],
         conjunctionWords: ["e"],
         sequentialWords: ["depois"],
@@ -857,6 +1289,29 @@ extension RuleBasedExtractionService {
             .health: ["dokter", "tandarts", "afspraak", "sportschool", "gezondheid"],
             .shopping: ["kopen", "boodschappen", "winkel"],
             .finance: ["betalen", "factuur", "bank", "belasting"],
+        ],
+        placeKeywords: [
+            "ziekenhuis": "Ziekenhuis", "dokter": "Dokter", "tandarts": "Tandarts",
+            "kantoor": "Kantoor", "school": "School", "universiteit": "Universiteit",
+            "supermarkt": "Supermarkt", "apotheek": "Apotheek", "bank": "Bank",
+            "sportschool": "Sportschool", "station": "Station", "vliegveld": "Vliegveld",
+            "kapper": "Kapper", "postkantoor": "Postkantoor", "bakker": "Bakker",
+            "restaurant": "Restaurant", "kerk": "Kerk", "bibliotheek": "Bibliotheek",
+        ],
+        fillerPrefixes: [
+            "ik moet nog", "ik moet", "ik zou", "we moeten", "ik wil",
+            "niet vergeten", "denk eraan", "vergeet niet",
+        ],
+        fillerWords: ["alsjeblieft", "ook nog", "ook", "even"],
+        detailPatterns: [
+            #"^.+\s+(?:meenemen|meebrengen)$"#,
+            #"^denken?\s+aan\s+.+$"#,
+            #"^niet\s+vergeten\s+.+$"#,
+        ],
+        detailContinuationPrefixes: ["met", "voor"],
+        referentialMarkers: ["met mij", "met ons"],
+        titleReductionRules: [
+            TitleReductionRule(pattern: #"^(?:ga(?:an)?\s+)?naar\s+(?:de\s+|het\s+)?(.+?)(?:\s+gaan)?$"#, template: "$1"),
         ],
         connectorWords: ["op", "om", "de", "het"],
         conjunctionWords: ["en"],
@@ -899,6 +1354,29 @@ extension RuleBasedExtractionService {
             .health: ["lekarz", "dentysta", "wizyta", "siłownia", "zdrowie"],
             .shopping: ["kupić", "zakupy", "sklep"],
             .finance: ["zapłacić", "faktura", "bank", "podatki"],
+        ],
+        placeKeywords: [
+            "szpital": "Szpital", "lekarz": "Lekarz", "dentysta": "Dentysta", "biuro": "Biuro",
+            "szkoła": "Szkoła", "uniwersytet": "Uniwersytet", "supermarket": "Supermarket",
+            "apteka": "Apteka", "bank": "Bank", "siłownia": "Siłownia", "dworzec": "Dworzec",
+            "lotnisko": "Lotnisko", "fryzjer": "Fryzjer", "poczta": "Poczta",
+            "piekarnia": "Piekarnia", "restauracja": "Restauracja", "kościół": "Kościół",
+            "biblioteka": "Biblioteka",
+        ],
+        fillerPrefixes: [
+            "muszę", "musimy", "powinienem", "powinnam", "trzeba", "chcę",
+            "nie zapomnieć", "pamiętać żeby", "pamiętaj żeby",
+        ],
+        fillerWords: ["proszę", "też", "jeszcze"],
+        detailPatterns: [
+            #"^(?:zabrać|przynieść|wziąć)\s+.+$"#,
+            #"^pamiętać\s+o\s+.+$"#,
+            #"^nie\s+zapomnieć\s+o?\s*.+$"#,
+        ],
+        detailContinuationPrefixes: ["z", "o", "dla"],
+        referentialMarkers: ["ze mną", "z nami"],
+        titleReductionRules: [
+            TitleReductionRule(pattern: #"^(?:iść|pójść|jechać|pojechać)\s+do\s+(.+)$"#, template: "$1"),
         ],
         connectorWords: ["w", "na", "o"],
         conjunctionWords: ["i"],

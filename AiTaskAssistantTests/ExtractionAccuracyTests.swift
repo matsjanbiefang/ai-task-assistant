@@ -130,4 +130,57 @@ struct ExtractionAccuracyTests {
         #expect(tasks[0].groupID == nil)
         #expect(tasks[1].groupID == nil)
     }
+
+    // MARK: Feedback round 3 — place and details are outside ExpectedTask's scored shape
+    // (§10 scores title/date/time/split/priority only), so they're verified here directly.
+
+    @Test
+    func placeExtractedFromDestination() {
+        let service = RuleBasedExtractionService.shared
+        let tasks = service.extractLine("i need to go to the hospital tomorrow", referenceDate: corpusToday)
+        #expect(tasks.first?.place == "Hospital")
+    }
+
+    @Test
+    func placeExtractedFromKeyword() {
+        let service = RuleBasedExtractionService.shared
+        let tasks = service.extractLine("arzttermin morgen", referenceDate: corpusToday)
+        #expect(tasks.first?.place == "Arzt")
+    }
+
+    @Test
+    func detailClauseAttachedNotSplit() {
+        let service = RuleBasedExtractionService.shared
+        let tasks = service.extractLine("go to the doctor and take my recipes with me", referenceDate: corpusToday)
+        guard tasks.count == 1 else {
+            Issue.record("expected a single task with details, got \(tasks.count): \(tasks)")
+            return
+        }
+        #expect(tasks[0].details?.lowercased().contains("recipes") == true)
+    }
+
+    @Test
+    func verblessContinuationBecomesDetail() {
+        let service = RuleBasedExtractionService.shared
+        let tasks = service.extractLine("arzttermin später, muss an mein rezept denken und an meine überweisung", referenceDate: corpusToday)
+        guard tasks.count == 1 else {
+            Issue.record("expected a single task with details, got \(tasks.count): \(tasks)")
+            return
+        }
+        #expect(tasks[0].title == "Arzttermin")
+        #expect(tasks[0].details?.lowercased().contains("rezept") == true)
+        #expect(tasks[0].details?.lowercased().contains("überweisung") == true)
+    }
+
+    @Test
+    func coordinatedObjectsStayInTitle() {
+        let service = RuleBasedExtractionService.shared
+        let tasks = service.extractLine("buy eggs and bread", referenceDate: corpusToday)
+        guard tasks.count == 1 else {
+            Issue.record("expected a single task, got \(tasks.count): \(tasks)")
+            return
+        }
+        #expect(tasks[0].title == "Buy eggs and bread")
+        #expect(tasks[0].details == nil)
+    }
 }

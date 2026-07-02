@@ -30,6 +30,10 @@ final class TaskItem {
     // two sub-lines).
     var linkedGroupID: UUID?
     var sequenceIndex: Int?
+    // Feedback round 3: where the task happens (extraction destination/keyword or user-edited),
+    // and supplementary details pulled out of the note line ("take my recipes with me").
+    var place: String?
+    var details: String?
 
     init(
         id: UUID = UUID(),
@@ -41,7 +45,9 @@ final class TaskItem {
         dateConfidence: Double = 1.0,
         sourceLineID: UUID? = nil,
         linkedGroupID: UUID? = nil,
-        sequenceIndex: Int? = nil
+        sequenceIndex: Int? = nil,
+        place: String? = nil,
+        details: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -55,5 +61,7 @@ final class TaskItem {
         self.sourceLineID = sourceLineID
         self.linkedGroupID = linkedGroupID
         self.sequenceIndex = sequenceIndex
+        self.place = place
+        self.details = details
     }
 }

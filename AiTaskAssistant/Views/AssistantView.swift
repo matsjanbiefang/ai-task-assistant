@@ -2,10 +2,6 @@ import SwiftUI
 import SwiftData
 
 struct AssistantView: View {
-    // Set by NoteView when a line's status icon (rather than the generic calendar icon) was
-    // tapped — jumps straight into that task's edit sheet instead of just showing the list.
-    var initialTask: TaskItem? = nil
-
     @Query(sort: \TaskItem.dueDate, order: .forward) private var tasks: [TaskItem]
     @Environment(\.modelContext) private var modelContext
     @State private var editingTask: TaskItem?
@@ -39,9 +35,6 @@ struct AssistantView: View {
             .navigationTitle("Tasks")
             .sheet(item: $editingTask) { task in
                 TaskEditView(task: task)
-            }
-            .onAppear {
-                if let initialTask { editingTask = initialTask }
             }
             .onChange(of: tasks) { _, _ in
                 Task { await refreshBadge() }
@@ -92,6 +85,11 @@ struct AssistantView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
+                    if let place = task.place {
+                        Label(place, systemImage: "mappin.and.ellipse")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                     if let cat = task.category {
                         Text(cat)
                             .font(.caption2)
@@ -102,6 +100,12 @@ struct AssistantView: View {
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
+                }
+                if let details = task.details {
+                    Text(details)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
                 }
             }
             .contentShape(Rectangle())

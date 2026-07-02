@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import UIKit
+import Combine
 
 // prd-update-01.md §3: free-form, persistent, Apple-Notes-style multi-line surface. Each committed
 // line is a `NoteLine`; pressing return (or tapping away from an edited line) commits/re-parses it
@@ -23,7 +24,7 @@ struct NoteView: View {
     @State private var composeText = ""
     @State private var permissionDenied = false
     @State private var speech = SpeechRecognizer()
-    @State private var targetTask: TaskItem?
+    @State private var editTask: TaskItem?
     @FocusState private var focusedTarget: FocusTarget?
 
     private let extraction = RuleBasedExtractionService.shared
@@ -51,10 +52,22 @@ struct NoteView: View {
                     .padding(.horizontal, 20)
                     .padding(.top, 24)
                 }
+                .scrollDismissesKeyboard(.interactively)
                 .onChange(of: lines.count) { _, _ in
                     withAnimation { proxy.scrollTo("compose", anchor: .bottom) }
                 }
-                .onChange(of: focusedTarget) { oldValue, newValue in
+                // Typing at the bottom of a long note: focus doesn't change while typing, so the
+                // focus-change scroll below never fires — scroll on the text itself growing.
+                .onChange(of: composeText) { _, _ in
+                    proxy.scrollTo("compose", anchor: .bottom)
+                }
+                // The focus-change scroll runs BEFORE the keyboard finishes its slide-up
+                // animation, so the scrolled-to position can end up covered anyway. keyboardDid-
+                // ShowNotification fires after the animation — re-scroll then with final sizes.
+                .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
+                    withAnimation { scrollToFocus(proxy) }
+                }
+                .onChange(of: focusedTarget) { oldValue, _ in
                     // Committing here (rather than from onSubmit) means a line's edits are saved
                     // no matter how focus leaves it — pressing Return, tapping a different line,
                     // tapping compose, or dismissing the keyboard all funnel through this single
@@ -62,13 +75,7 @@ struct NoteView: View {
                     if case .line(let id) = oldValue, let line = lines.first(where: { $0.id == id }) {
                         Task { await commitLine(line) }
                     }
-                    withAnimation {
-                        switch newValue {
-                        case .line(let id): proxy.scrollTo(id, anchor: .bottom)
-                        case .compose: proxy.scrollTo("compose", anchor: .bottom)
-                        case nil: break
-                        }
-                    }
+                    withAnimation { scrollToFocus(proxy) }
                 }
             }
             bottomBar
@@ -85,9 +92,22 @@ struct NoteView: View {
             if isRecording { composeText = new }
         }
         .sheet(isPresented: $showTasks) {
-            AssistantView(initialTask: targetTask)
+            AssistantView()
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
+        }
+        // Feedback round 3: tapping a single-task line's indicator opens that task's editor
+        // directly — no task list in between.
+        .sheet(item: $editTask) { task in
+            TaskEditView(task: task)
+        }
+    }
+
+    private func scrollToFocus(_ proxy: ScrollViewProxy) {
+        switch focusedTarget {
+        case .line(let id): proxy.scrollTo(id, anchor: .bottom)
+        case .compose: proxy.scrollTo("compose", anchor: .bottom)
+        case nil: break
         }
     }
 
@@ -124,8 +144,13 @@ struct NoteView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             Button {
-                targetTask = allTasks.first { $0.sourceLineID == line.id }
-                showTasks = true
+                let tasksForLine = allTasks.filter { $0.sourceLineID == line.id }
+                if tasksForLine.count == 1 {
+                    editTask = tasksForLine[0]
+                } else {
+                    // several tasks came out of this line — no single editor to jump to
+                    showTasks = true
+                }
             } label: {
                 statusIcon(for: line)
             }
@@ -183,19 +208,30 @@ struct NoteView: View {
         return tasksForLine.allSatisfy(\.isCompleted)
     }
 
-    // §3 + user feedback: small icon row showing exactly what got extracted from the line (time /
-    // category / priority / linked-step), not just a generic task-count badge — tapping it jumps
-    // straight to the relevant task(s) in the sheet.
+    // Feedback round 3: always-visible extraction indicators. Time and place ALWAYS show — an
+    // uncrossed icon means the engine found that signal, a crossed/dimmed one means it didn't —
+    // so a glance tells the user exactly what got logged. Details/link/category/priority icons
+    // appear only when present.
     @ViewBuilder
     private func statusIcon(for line: NoteLine) -> some View {
         let tasksForLine = allTasks.filter { $0.sourceLineID == line.id }
         if line.hasLowConfidence {
             Image(systemName: "questionmark.circle")
+                .font(.caption2)
                 .foregroundStyle(.orange)
         } else if !tasksForLine.isEmpty {
+            let hasTime = tasksForLine.contains { $0.dueTime != nil }
+            let hasPlace = tasksForLine.contains { $0.place != nil }
             HStack(spacing: 3) {
-                if tasksForLine.contains(where: { $0.dueTime != nil }) {
-                    Image(systemName: "clock")
+                Image(systemName: hasTime ? "clock" : "clock.badge.xmark")
+                    .foregroundStyle(hasTime ? Color.secondary : Color.secondary.opacity(0.35))
+                Image(systemName: hasPlace ? "mappin.and.ellipse" : "mappin.slash")
+                    .foregroundStyle(hasPlace ? Color.secondary : Color.secondary.opacity(0.35))
+                if tasksForLine.contains(where: { $0.details != nil }) {
+                    Image(systemName: "note.text")
+                }
+                if tasksForLine.contains(where: { $0.linkedGroupID != nil }) {
+                    Image(systemName: "link")
                 }
                 if let category = tasksForLine.compactMap(\.category).first {
                     Image(systemName: categoryIcon(category))
@@ -204,15 +240,12 @@ struct NoteView: View {
                     Image(systemName: "flag.fill")
                         .foregroundStyle(priorityColor(priority))
                 }
-                if tasksForLine.contains(where: { $0.linkedGroupID != nil }) {
-                    Image(systemName: "link")
-                }
                 if line.taskCount > 1 {
                     Text("\(line.taskCount)")
                         .font(.caption2.bold())
                 }
             }
-            .font(.caption)
+            .font(.caption2)
             .foregroundStyle(.secondary)
         }
     }
@@ -273,7 +306,6 @@ struct NoteView: View {
             }
 
             Button {
-                targetTask = nil
                 showTasks = true
             } label: {
                 Image(systemName: "calendar")
@@ -367,7 +399,9 @@ struct NoteView: View {
                 dateConfidence: task.dateConfidence,
                 sourceLineID: line.id,
                 linkedGroupID: task.groupID,
-                sequenceIndex: task.sequenceIndex
+                sequenceIndex: task.sequenceIndex,
+                place: task.place,
+                details: task.details
             )
             modelContext.insert(item)
             if let date = item.dueDate, date > .now {
