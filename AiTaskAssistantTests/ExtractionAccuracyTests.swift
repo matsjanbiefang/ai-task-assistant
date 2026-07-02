@@ -1,4 +1,5 @@
 import Testing
+import Foundation
 @testable import AiTaskAssistant
 
 // MARK: - Milestone 0 scoring harness (prd-update-01.md §7, §10)
