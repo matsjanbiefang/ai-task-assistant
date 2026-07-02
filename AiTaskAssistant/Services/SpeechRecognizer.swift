@@ -21,7 +21,15 @@ final class SpeechRecognizer {
         recognizer = SFSpeechRecognizer(locale: Locale.current)
     }
 
-    func requestPermissions() async -> Bool {
+    // Confirmed via an actual TestFlight crash log (2026-07-02, iPhone 14 / iOS 26.5):
+    // `dispatch_assert_queue_fail` inside `_swift_task_checkIsolatedSwift`, in the completion
+    // closure passed to `SFSpeechRecognizer.requestAuthorization`. Because this method lives on
+    // a `@MainActor` class, the compiler infers that closure as MainActor-isolated — but TCC
+    // actually invokes it on its own background XPC callback thread, and Swift 6's runtime
+    // isolation check crashes on that mismatch. Marking the method `nonisolated` stops the
+    // closure from being inferred as MainActor-bound in the first place, since resuming a
+    // continuation is safe from any thread regardless.
+    nonisolated func requestPermissions() async -> Bool {
         let speechStatus = await withCheckedContinuation { continuation in
             SFSpeechRecognizer.requestAuthorization { status in
                 continuation.resume(returning: status)
