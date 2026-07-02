@@ -257,3 +257,133 @@ M2 checklist when ready:
 - Add `NSMicrophoneUsageDescription` and `NSSpeechRecognitionUsageDescription` to `Info.plist`
 - Build mic button with `AVAudioEngine` in `NoteView`
 - Validate multi-task splitting with actual voice
+
+---
+
+## PRD Update 01 — 2026-07-02
+
+Testing after the MVP surfaced two hard requirements that override the original PRD: extraction must
+work on every supported device with no model download (`prd-update-01.md` §1), and bilingual
+German/English input is a hard requirement (§2). New TODO list written to `TODO.md` (`U0`–`U5`)
+tracking this update; it supersedes the original MVP `TODO.md` milestones.
+
+### U0-1: Remove MLX bundled-LLM pipeline, add `RuleBasedExtractionService`
+
+The most recent MVP commits had gotten a bundled `mlx-community/Llama-3.2-1B-Instruct-4bit` model
+(via `MLXLLM`/`MLXLMCommon`) compiling as the extraction engine, with `ModelLoadingView` gating the
+UI behind a ~700 MB one-time download. `prd-update-01.md` §1 rules this out entirely — no bundled
+model of any size, rules-based extraction must run identically on every device including iPhone
+13/14.
+
+**Removed:**
+- `AiTaskAssistant/Services/ExtractionService.swift` (MLX-based) and `AiTaskAssistant/Views/ModelLoadingView.swift`
+- `MLXLLM`/`MLXLMCommon` package products, the `mlx-swift-examples` `XCRemoteSwiftPackageReference`,
+  and all associated `PBXBuildFile`/`PBXFrameworksBuildPhase`/`packageProductDependencies` entries in
+  `project.pbxproj`
+- `LLMState` and the `ContentView` loading-gate (`if llm.isReady { ... } else { ModelLoadingView() }`)
+  — `ContentView` now shows the `TabView` immediately, no async model-load step exists anymore
+- The Codemagic `Download Metal Toolchain` step (`codemagic.yaml`) — that was MLX's Metal compute
+  dependency, irrelevant now
+- Lowered `IPHONEOS_DEPLOYMENT_TARGET` from 26.0 to 17.0 across all build configs — nothing in the
+  rules engine needs the `FoundationModels` framework or iOS 26; §8 suggests iOS 17 as the target
+
+**Added:** `AiTaskAssistant/Services/RuleBasedExtractionService.swift` — first-pass rules engine,
+synchronous (no `async`/`throws`, since rule matching can't meaningfully fail):
+- `NLLanguageRecognizer` picks a per-line dominant language, which only decides *match order*
+  (German rules first vs. `NSDataDetector` first) — the other matcher still runs as a fallback on a
+  miss. This deliberately avoids the "wrong locale silently misses the date" failure mode called out
+  in §2, since `NSDataDetector` has no public per-call locale override.
+- German date phrases handled by a hand-written `NSRegularExpression` rule table (heute/morgen/
+  übermorgen, "in N tagen/wochen", "nächsten/diesen <weekday>", bare weekday names, "nächste
+  woche") since `NSDataDetector` does not reliably parse German colloquialisms. English/general
+  dates go through `NSDataDetector(types: .date)`.
+- Confidence heuristic: 1.0 when no date phrase is found at all; lower (0.5–0.6) when the matched
+  date phrase makes up almost the entire line (the bare-weekday "unsure" case from §7); otherwise
+  0.85–0.9 depending on how explicit the phrase is.
+- Trailing `!`/`!!` → high priority per §6; plus keyword-prefix rules (`urgent:`, `low priority —`,
+  etc.) carried over from the MVP harness sentences.
+- Category keyword dictionaries (EN+DE combined, checked regardless of detected language — more
+  robust for Denglisch lines than gating on the language guess).
+- Line-splitting on " and "/" und " only when `NLTagger` (`.lexicalClass`) finds a verb on both
+  sides of the conjunction, satisfying the "two verb phrases" condition in §3 rather than splitting
+  on every "and".
+
+**Known gap, deferred to U0-8:** none of this has been run against real data yet — there's no
+corpus and no scoring harness. `NLTagger`'s POS tagging is documented as strongest for English;
+German verb-phrase detection for the "und" split may under-trigger and will need checking once the
+corpus exists (U0-2/U0-7).
+
+**Updated call sites:** `NoteView.swift` (`submit()` no longer needs `do`/`catch` since extraction
+can't throw; `parsedDate`/`isoDate` now use a plain local-timezone `DateFormatter("yyyy-MM-dd")`
+instead of `ISO8601DateFormatter`, avoiding the UTC-day-shift bug that formatter had for users west
+of UTC), `ExtractionHarnessView.swift` (same sync call, still useful as a manual smoke-test screen
+until U0-2's real corpus + U0-7's XCTest harness replace it).
+
+**Next:** U0-2 (hand-labeled 50–100 line corpus) and U0-7 (XCTest scoring harness) — need those
+before U0-8 can iterate on accuracy against the §10 90% target.
+
+### U0-2: Hand-labeled corpus
+
+**File:** `AiTaskAssistantTests/ExtractionCorpus.swift`
+
+52 corpus cases, several of them multi-line notes, totaling 64 individual scored lines (within the
+50–100 range in §7). Covers every required bucket: simple dated/no-date lines, `!`/`!!` priority,
+German phrases (`heute`/`morgen`/`übermorgen`, `nächsten/diesen <weekday>`, `in N tagen/wochen`, `um
+HH uhr`), Denglisch multi-line notes, run-on conjunction splits (including a negative case —
+"buy eggs and bread" must NOT split), bare ambiguous weekday fragments, and vague/no-date lines.
+
+Key structural decision: `expected` is `[[ExpectedTask]]`, one inner array per non-empty input
+line (not one flat array per note) — §10 scores accuracy per corpus *line*, and split count is one
+of the four scored fields, so the fixture needs to know which tasks belong to which line to score
+splitting correctly.
+
+`category` is deliberately not part of `ExpectedTask` — re-reading §10 closely, the four scored
+fields are title/due date/due time/split count/priority; task category isn't one of them. Not
+scoring it removes a lot of ambiguous hand-labeling judgment calls (e.g. is cancelling a gym
+membership "health" or "personal"?) that don't actually affect the Milestone 0 exit criterion.
+
+All relative dates resolve against a fixed `corpusReferenceDate` (2026-07-02, a Thursday) baked
+into the fixture — the harness must pass this exact date, never `.now`, or every relative-date
+expectation goes stale.
+
+**Honest caveat:** these expectations are hand-labeled ground truth, not verified against a real
+run of `NSDataDetector`/`NLTagger` (no Mac/Xcode available in this environment to compile and run
+them). Two specific spots flagged as at-risk during writing:
+- `englishDateMatch`'s exact match-span boundaries (e.g. does NSDataDetector match "3pm friday" or
+  "at 3pm friday"?) are unverified — titles were deliberately worded so leftover edge words from
+  either boundary ("at", "on", etc.) get stripped by `cleanTitle`'s connector-word list, so the
+  expectation should hold regardless of the exact span.
+- id 46 ("prepare slides for kickoff and book the conference room") is a deliberately risky case:
+  `NLTagger` may tag "book" as a noun (its more frequent sense) rather than a verb, which would
+  make the split rule fail to trigger. Left in on purpose as a concrete edge case for U0-8 rather
+  than removed to make the corpus easier to pass.
+
+### U0-7: XCTest/Swift Testing scoring harness
+
+**File:** `AiTaskAssistantTests/ExtractionAccuracyTests.swift`
+
+PRD §7 says "XCTest"; the project's existing test target (`AiTaskAssistantTests.swift`) already
+uses the modern Swift Testing framework (`import Testing`, `@Test`), so this harness follows that
+existing convention instead of introducing a second test framework — same intent (permanent
+automated regression suite), current Apple-recommended tooling.
+
+Two entry points:
+- `corpusCase(_:)` — a `@Test(arguments: extractionCorpus)` parameterized test, one failure per
+  broken corpus line, for pinpointing exactly which cases regressed (§7's "categorize failures"
+  step).
+- `overallAccuracyMeetsTarget()` — runs the whole corpus, prints a per-`CorpusFocus`-category
+  breakdown (dates/titles/splitting/language/priority/ambiguous/noDate) to the console, and asserts
+  overall accuracy ≥ 90% (§10). **This test is expected to fail right now** — nothing has been run
+  against real `NSDataDetector`/`NLTagger` output yet. That failure is Milestone 0's exit criterion
+  not yet being met, not a bug in the harness.
+
+Concurrency note: had to add explicit `Sendable` conformance to `TaskPriority`, `TaskCategory`,
+`ExtractedTask`, `RuleBasedExtractionService`, `ExpectedTask`, `CorpusCase`, and `CorpusFocus`, plus
+`nonisolated(unsafe)` on the static `NSDataDetector` instance — the project builds with
+`SWIFT_VERSION = 6.0`, which enables full strict concurrency checking, and Swift Testing's
+`@Test(arguments:)` requires the argument collection to be `Sendable`.
+
+**Status: U0-8 is blocked.** This environment has no Xcode/macOS, so the corpus + harness above
+have never actually been compiled or run. Next step is on a Mac: open the project, run the
+`AiTaskAssistantTests` target, read the per-category printout from `overallAccuracyMeetsTarget()`,
+and report back (or iterate directly) so U0-8 can proceed.

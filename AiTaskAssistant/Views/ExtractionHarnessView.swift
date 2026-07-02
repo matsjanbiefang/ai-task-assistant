@@ -8,7 +8,7 @@ struct ExtractionHarnessView: View {
     @State private var isRunning = false
     @State private var progress = 0
 
-    private let service = ExtractionService()
+    private let service = RuleBasedExtractionService.shared
 
     var body: some View {
         NavigationStack {
@@ -47,8 +47,8 @@ struct ExtractionHarnessView: View {
         progress = 0
         for sentence in testSentences {
             let output: String
+            let extracted = service.extract(from: sentence)
             do {
-                let extracted = try await service.extract(from: sentence)
                 let encoder = JSONEncoder()
                 encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
                 let data = try encoder.encode(extracted.map { CodableExtractedTask($0) })

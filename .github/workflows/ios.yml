@@ -32,10 +32,32 @@ jobs:
               CODE_SIGNING_ALLOWED=NO
 
       - name: Run tests (simulator)
+        id: run_tests
+        continue-on-error: true
         run: |
+          set -o pipefail
           xcodebuild test \
             -project AiTaskAssistant.xcodeproj \
-            -scheme AiTaskAssistantTests \
+            -scheme AiTaskAssistant \
             -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
             CODE_SIGNING_ALLOWED=NO \
-            2>&1 | tail -50 || true
+            2>&1 | tee test-output.log
+
+      # Milestone 0's exit criterion (prd-update-01.md §10) lives in this printed block —
+      # surface it directly in the job log instead of relying on the (possibly truncated)
+      # raw xcodebuild output.
+      - name: Show extraction accuracy report
+        if: always()
+        run: |
+          grep -A 20 "Extraction accuracy" test-output.log || echo "No accuracy report found in test-output.log — did the corpus test even run?"
+
+      - name: Upload full test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-output-log
+          path: test-output.log
+
+      - name: Fail job if tests failed
+        if: steps.run_tests.outcome == 'failure'
+        run: exit 1

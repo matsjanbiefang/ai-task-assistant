@@ -12,7 +12,7 @@ struct NoteView: View {
     @State private var speech = SpeechRecognizer()
     @FocusState private var isFocused: Bool
 
-    private let extraction = ExtractionService.shared
+    private let extraction = RuleBasedExtractionService.shared
 
     private var isRecording: Bool { speech.state == .recording }
     private var canSubmit: Bool { !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isExtracting }
@@ -112,31 +112,27 @@ struct NoteView: View {
         isExtracting = true
         defer { isExtracting = false }
 
-        do {
-            let extracted = try await extraction.extract(from: text)
-            for task in extracted {
-                let item = TaskItem(
-                    title: task.title,
-                    dueDate: parsedDate(task.dueDate),
-                    priority: task.priority?.rawValue,
-                    category: task.category?.rawValue,
-                    dateConfidence: task.dateConfidence
+        let extracted = extraction.extract(from: text)
+        for task in extracted {
+            let item = TaskItem(
+                title: task.title,
+                dueDate: parsedDate(task.dueDate),
+                priority: task.priority?.rawValue,
+                category: task.category?.rawValue,
+                dateConfidence: task.dateConfidence
+            )
+            modelContext.insert(item)
+            // M3-2: schedule notification if task has a future due date
+            if let date = item.dueDate, date > .now {
+                await NotificationService.shared.schedule(
+                    taskID: item.id.uuidString,
+                    title: item.title,
+                    at: date
                 )
-                modelContext.insert(item)
-                // M3-2: schedule notification if task has a future due date
-                if let date = item.dueDate, date > .now {
-                    await NotificationService.shared.schedule(
-                        taskID: item.id.uuidString,
-                        title: item.title,
-                        at: date
-                    )
-                }
             }
-            try modelContext.save()
-        } catch {
-            modelContext.insert(TaskItem(title: text))
-            try? modelContext.save()
         }
+        try? modelContext.save()
+
         // M3-4: refresh badge count
         await refreshBadge()
 
@@ -146,8 +142,9 @@ struct NoteView: View {
 
     private func parsedDate(_ string: String?) -> Date? {
         guard let string else { return nil }
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withFullDate]
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.timeZone = .current
         return f.date(from: string)
     }
 

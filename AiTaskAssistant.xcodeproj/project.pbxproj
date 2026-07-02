@@ -12,7 +12,7 @@
 		A1000003 /* NoteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000003 /* NoteView.swift */; };
 		A1000004 /* AssistantView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000004 /* AssistantView.swift */; };
 		A1000005 /* TaskItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000005 /* TaskItem.swift */; };
-		A1000006 /* ExtractionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000006 /* ExtractionService.swift */; };
+		A1000006 /* RuleBasedExtractionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000006 /* RuleBasedExtractionService.swift */; };
 		A1000007 /* AddTaskIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000007 /* AddTaskIntent.swift */; };
 		A1000008 /* AiTaskAssistantTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000008 /* AiTaskAssistantTests.swift */; };
 		A1000009 /* ExtractionHarnessView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000012 /* ExtractionHarnessView.swift */; };
@@ -20,10 +20,8 @@
 		A1000011 /* SpeechRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000014 /* SpeechRecognizer.swift */; };
 		A1000012 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000015 /* NotificationService.swift */; };
 		A1000013 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A2000016 /* Assets.xcassets */; };
-		A1000014 /* ModelLoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000017 /* ModelLoadingView.swift */; };
-
-		A1000015 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = A2000018 /* MLXLLM */; };
-		A1000016 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = A2000019 /* MLXLMCommon */; };
+		A1000017 /* ExtractionCorpus.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000021 /* ExtractionCorpus.swift */; };
+		A1000018 /* ExtractionAccuracyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000022 /* ExtractionAccuracyTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -36,14 +34,15 @@
 		A2000013 /* TaskEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskEditView.swift; sourceTree = "<group>"; };
 		A2000014 /* SpeechRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechRecognizer.swift; sourceTree = "<group>"; };
 		A2000015 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
-		A2000006 /* ExtractionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtractionService.swift; sourceTree = "<group>"; };
+		A2000006 /* RuleBasedExtractionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuleBasedExtractionService.swift; sourceTree = "<group>"; };
 		A2000007 /* AddTaskIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddTaskIntent.swift; sourceTree = "<group>"; };
 		A2000008 /* AiTaskAssistantTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AiTaskAssistantTests.swift; sourceTree = "<group>"; };
 		A2000009 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A2000016 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		A2000017 /* ModelLoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelLoadingView.swift; sourceTree = "<group>"; };
 		A2000010 /* AiTaskAssistant.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AiTaskAssistant.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2000011 /* AiTaskAssistantTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AiTaskAssistantTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A2000021 /* ExtractionCorpus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtractionCorpus.swift; sourceTree = "<group>"; };
+		A2000022 /* ExtractionAccuracyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtractionAccuracyTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -51,8 +50,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A1000015 /* MLXLLM in Frameworks */,
-				A1000016 /* MLXLMCommon in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -93,6 +90,8 @@
 			isa = PBXGroup;
 			children = (
 				A2000008 /* AiTaskAssistantTests.swift */,
+				A2000021 /* ExtractionCorpus.swift */,
+				A2000022 /* ExtractionAccuracyTests.swift */,
 			);
 			path = AiTaskAssistantTests;
 			sourceTree = "<group>";
@@ -122,7 +121,6 @@
 				A2000004 /* AssistantView.swift */,
 				A2000012 /* ExtractionHarnessView.swift */,
 				A2000013 /* TaskEditView.swift */,
-				A2000017 /* ModelLoadingView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -138,7 +136,7 @@
 		A4000008 /* Services */ = {
 			isa = PBXGroup;
 			children = (
-				A2000006 /* ExtractionService.swift */,
+				A2000006 /* RuleBasedExtractionService.swift */,
 				A2000014 /* SpeechRecognizer.swift */,
 				A2000015 /* NotificationService.swift */,
 			);
@@ -169,10 +167,6 @@
 			dependencies = (
 			);
 			name = AiTaskAssistant;
-			packageProductDependencies = (
-				A2000018 /* MLXLLM */,
-				A2000019 /* MLXLMCommon */,
-			);
 			productName = AiTaskAssistant;
 			productReference = A2000010 /* AiTaskAssistant.app */;
 			productType = "com.apple.product-type.application";
@@ -223,9 +217,6 @@
 			);
 			mainGroup = A4000001 /* Root */;
 			productRefGroup = A4000004 /* Products */;
-			packageReferences = (
-				A2000020 /* XCRemoteSwiftPackageReference "mlx-swift-examples" */,
-			);
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -256,13 +247,12 @@
 				A1000003 /* NoteView.swift in Sources */,
 				A1000004 /* AssistantView.swift in Sources */,
 				A1000005 /* TaskItem.swift in Sources */,
-				A1000006 /* ExtractionService.swift in Sources */,
+				A1000006 /* RuleBasedExtractionService.swift in Sources */,
 				A1000007 /* AddTaskIntent.swift in Sources */,
 				A1000009 /* ExtractionHarnessView.swift in Sources */,
 				A1000010 /* TaskEditView.swift in Sources */,
 				A1000011 /* SpeechRecognizer.swift in Sources */,
 				A1000012 /* NotificationService.swift in Sources */,
-				A1000014 /* ModelLoadingView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -271,6 +261,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				A1000008 /* AiTaskAssistantTests.swift in Sources */,
+				A1000017 /* ExtractionCorpus.swift in Sources */,
+				A1000018 /* ExtractionAccuracyTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -293,7 +285,7 @@
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = AiTaskAssistant/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -316,7 +308,7 @@
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = AiTaskAssistant/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -338,7 +330,7 @@
 				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.matsb.AiTaskAssistantTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -356,7 +348,7 @@
 				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.matsb.AiTaskAssistantTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -416,7 +408,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -470,7 +462,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
@@ -510,30 +502,6 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
-
-/* Begin XCRemoteSwiftPackageReference section */
-		A2000020 /* XCRemoteSwiftPackageReference "mlx-swift-examples" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/ml-explore/mlx-swift-examples";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = "2.0.0";
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		A2000018 /* MLXLLM */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = A2000020 /* XCRemoteSwiftPackageReference "mlx-swift-examples" */;
-			productName = MLXLLM;
-		};
-		A2000019 /* MLXLMCommon */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = A2000020 /* XCRemoteSwiftPackageReference "mlx-swift-examples" */;
-			productName = MLXLMCommon;
-		};
-/* End XCSwiftPackageProductDependency section */
 
 	};
 	rootObject = A9000001 /* Project object */;
