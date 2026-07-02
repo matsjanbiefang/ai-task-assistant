@@ -17,33 +17,43 @@ struct OnboardingLanguageView: View {
         NavigationStack {
             List {
                 ForEach(sortedLanguages) { language in
-                    Button {
-                        selected = language
-                    } label: {
-                        HStack {
-                            Text(language.displayName)
-                                .foregroundStyle(.primary)
-                            Spacer()
-                            if language == selected {
-                                Image(systemName: "checkmark")
-                                    .foregroundStyle(.accentColor)
-                            }
-                        }
-                    }
+                    languageRow(language)
                 }
             }
             .navigationTitle("Choose your language")
             .safeAreaInset(edge: .bottom) {
-                Button {
-                    onSelect(selected)
-                } label: {
-                    Text("Continue")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .padding()
+                continueButton
             }
         }
+    }
+
+    @ViewBuilder
+    private func languageRow(_ language: SupportedLanguage) -> some View {
+        let isSelected = language == selected
+        Button {
+            selected = language
+        } label: {
+            HStack {
+                Text(language.displayName)
+                    .foregroundStyle(.primary)
+                Spacer()
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .foregroundStyle(.accentColor)
+                }
+            }
+        }
+    }
+
+    private var continueButton: some View {
+        Button {
+            onSelect(selected)
+        } label: {
+            Text("Continue")
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.borderedProminent)
+        .padding()
     }
 }
 
