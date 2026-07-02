@@ -105,7 +105,13 @@ struct ExtractionAccuracyTests {
     func sequentialConnectorLinksSplitTasks() {
         let service = RuleBasedExtractionService.shared
         let tasks = service.extractLine("need to adjust the laptop and then inform martin about it", referenceDate: corpusToday)
-        #expect(tasks.count == 2)
+        // Guarded rather than asserted directly: an out-of-bounds tasks[1] access on a failed
+        // split would trap and abort the whole test binary before overallAccuracyMeetsTarget()
+        // ever runs — exactly what happened the first time this test was written.
+        guard tasks.count == 2 else {
+            Issue.record("expected the line to split into 2 tasks, got \(tasks.count): \(tasks)")
+            return
+        }
         #expect(tasks[0].groupID != nil)
         #expect(tasks[0].groupID == tasks[1].groupID)
         #expect(tasks[0].sequenceIndex == 0)
@@ -117,7 +123,10 @@ struct ExtractionAccuracyTests {
     func plainConjunctionDoesNotLinkSplitTasks() {
         let service = RuleBasedExtractionService.shared
         let tasks = service.extractLine("buy milk and call the dentist", referenceDate: corpusToday)
-        #expect(tasks.count == 2)
+        guard tasks.count == 2 else {
+            Issue.record("expected the line to split into 2 tasks, got \(tasks.count): \(tasks)")
+            return
+        }
         #expect(tasks[0].groupID == nil)
         #expect(tasks[1].groupID == nil)
     }

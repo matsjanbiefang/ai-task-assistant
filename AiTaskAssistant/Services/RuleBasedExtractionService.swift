@@ -611,6 +611,10 @@ extension RuleBasedExtractionService {
             "think", "do", "get", "make", "take", "bring", "check", "confirm", "submit", "order",
             "drop", "pack", "email", "text", "message", "update", "install", "download", "upload",
             "inform", "adjust", "notify", "tell", "ask", "arrange",
+            // Common modal-verb sentence starters ("need to adjust the laptop") — NLTagger's
+            // lexicalClass tagging on short, lowercase, context-free fragments isn't reliable
+            // enough to trust for these on its own (see comment on containsVerb below).
+            "need", "want", "have", "should", "must", "plan",
         ],
         verbSuffixes: []
     )
