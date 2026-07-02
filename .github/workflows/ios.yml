@@ -16,11 +16,15 @@ jobs:
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_16.app
 
-      # The runner's Xcode install ships with no iOS Simulator runtime pre-cached — without this,
-      # every -destination 'platform=iOS Simulator,...' below fails with "Unable to find a
-      # destination matching the provided destination specifier".
-      - name: Download iOS simulator runtime
-        run: xcodebuild -downloadPlatform iOS
+      # Two failed guesses in a row here (missing simulator destination, then
+      # -downloadPlatform failing with "Unable to connect to simulator") — stop guessing and
+      # print what's actually on the runner before touching the destination again.
+      - name: Diagnose available simulators
+        run: |
+          ls /Applications | grep -i xcode || true
+          xcodebuild -version
+          xcrun simctl list runtimes
+          xcrun simctl list devicetypes | grep -i iphone
 
       - name: Build (simulator)
         run: |
