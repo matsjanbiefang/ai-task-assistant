@@ -6,6 +6,7 @@ struct NoteView: View {
     @Binding var activateDictation: Bool
 
     @Environment(\.modelContext) private var modelContext
+    @AppStorage("primaryLanguageCode") private var primaryLanguageCode = "en"
     @State private var inputText = ""
     @State private var isExtracting = false
     @State private var permissionDenied = false
@@ -112,7 +113,7 @@ struct NoteView: View {
         isExtracting = true
         defer { isExtracting = false }
 
-        let extracted = extraction.extract(from: text)
+        let extracted = extraction.extract(from: text, primaryLanguageCode: primaryLanguageCode)
         for task in extracted {
             let item = TaskItem(
                 title: task.title,

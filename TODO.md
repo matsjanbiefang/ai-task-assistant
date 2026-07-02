@@ -1,14 +1,21 @@
-# AI Task Assistant — TODO (PRD Update 01)
+# AI Task Assistant — TODO (PRD Updates 01 + 02)
 
-> Workflow: Before starting any item, re-read `prd-update-01.md`. After finishing any item, re-read it again
-> before starting the next one, to keep the end-to-end vision in view.
+> Workflow: Before starting any item, re-read `prd-update-01.md` and `prd-update-02.md`. After
+> finishing any item, re-read them again before starting the next one, to keep the end-to-end
+> vision in view.
 > Log every completed item in `IMPLEMENTATION-LOG.md`.
-> Original MVP TODO/history is preserved in git log — this file supersedes it per `prd-update-01.md`.
+> Original MVP TODO/history is preserved in git log — this file supersedes it.
 
 **Key pivot from MVP:** the bundled MLX LLM (`mlx-community/Llama-3.2-1B-Instruct-4bit`) extraction
 pipeline built during MVP is being removed entirely. Extraction becomes rules-based
 (`NSDataDetector` + `NaturalLanguage`), runs on all devices, no model download. Foundation Models
 becomes an optional post-MVP enhancement layer only (§5). See `prd-update-01.md` §1.
+
+**Market expansion (prd-update-02.md):** launching in North America + Europe means extraction must
+work across all 24 EU official languages (which already covers NA's English/French/Spanish), each
+with its own hand-written rule table validated the same corpus-and-CI way Milestone 0 was. Rolled
+out in batches (§4), not all at once. An onboarding language picker (§3) sets the primary language
+per user instead of relying solely on per-line auto-detection.
 
 ---
 
@@ -31,11 +38,29 @@ becomes an optional post-MVP enhancement layer only (§5). See `prd-update-01.md
 - [x] **U0-7** Build an XCTest scoring harness that runs the corpus through the service, diffs against
       expected output, and reports per-category accuracy (dates / titles / splitting / language) —
       this becomes the permanent regression suite
-- [ ] **U0-8** ⚠️ BLOCKED — needs a real `xcodebuild test`/Xcode run on a Mac (no compiler available
-      here). Run the suite, read `ExtractionAccuracyTests.overallAccuracyMeetsTarget()`'s printed
-      per-category breakdown, fix the biggest failure category, re-run. Repeat until ≥90% of corpus
-      lines are fully correct (§10) or a category proves rules-resistant. Document the final accuracy
-      numbers and any accepted shortfall in `IMPLEMENTATION-LOG.md`
+- [x] **U0-8** Iterated via GitHub Actions (macos-15 runner) since no local Mac is available: 73% →
+      93% → **100% (64/64)** across dates/splitting/language/priority/ambiguous/noDate. §10 target
+      met and exceeded. See `IMPLEMENTATION-LOG.md` for the specific bugs found and fixed each round
+
+## Milestone 0.5 — Multi-Language Architecture + Onboarding + Batch 1 (prd-update-02.md)
+
+- [ ] **L-1** Refactor `RuleBasedExtractionService`'s German-specific rule logic into a data-driven,
+      per-language rule table structure (weekdays, relative-date phrases, time-phrase patterns,
+      priority/category keywords keyed by language code) so adding a language doesn't mean
+      duplicating control flow — German's existing rules become the first table under this structure
+- [ ] **L-2** Add an onboarding screen: pick primary language from the 24 supported, defaulting to
+      device locale if supported else English (§3). Store the selection (e.g. `@AppStorage`),
+      editable later from settings
+- [ ] **L-3** Wire primary-language-first resolution: try the onboarding-selected language's rules
+      first, fall back to per-line `NLLanguageRecognizer`-detected language's rules, matching §3's
+      "ask once, still handle mixed lines" approach
+- [ ] **L-4** Author Batch 1 rule tables: French, Spanish, Italian, Portuguese, Dutch, Polish (§4)
+- [ ] **L-5** Extend the corpus with cases per Batch 1 language and validate via the CI accuracy
+      harness (same loop as U0-8) until each language is in good shape; document results and any
+      known gaps in `IMPLEMENTATION-LOG.md`
+- [ ] **L-6** Flag remaining languages (Swedish, Danish, Finnish, Greek, Czech, Slovak, Hungarian,
+      Romanian, Bulgarian, Croatian, Slovenian, Estonian, Latvian, Lithuanian, Maltese, Irish) as
+      Milestone 6 follow-up work, not silently shipped unverified
 
 ## Milestone 1 — Notes Screen + Structured View Redesign
 
@@ -78,3 +103,13 @@ becomes an optional post-MVP enhancement layer only (§5). See `prd-update-01.md
       cleanup, run-on splitting, mixed-language handling) — never the sole path for any feature
 - [ ] **U5-3** When unavailable: confirm rules output ships as-is with identical features (quality-only
       delta, never a capability gap) (§5, §8)
+
+## Milestone 6 — Batch 2+ Language Rollout (post-launch, prd-update-02.md §4)
+
+- [ ] **L-7** Author + validate remaining EU language rule tables in batches (Swedish, Danish,
+      Finnish, Greek, Czech, Slovak, Hungarian, Romanian, Bulgarian, Croatian, Slovenian first —
+      larger populations; Estonian, Latvian, Lithuanian, Maltese, Irish after), each going through
+      its own corpus + CI accuracy loop before being marked supported
+- [ ] **L-8** Native-speaker or professional-translation review pass per language before it's
+      surfaced as fully supported in the language picker — confidence from general knowledge alone
+      is markedly lower for Finnish, Hungarian, Estonian, Latvian, Lithuanian, Maltese, Irish

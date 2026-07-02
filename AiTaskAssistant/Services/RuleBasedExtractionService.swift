@@ -20,13 +20,50 @@ struct ExtractedTask: Sendable {
     var dateConfidence: Double
 }
 
+// MARK: - Per-language rule table (prd-update-02.md §2)
+//
+// Each supported language gets its own hand-written table of the phrases NSDataDetector doesn't
+// reliably cover for that language (relative dates, weekday phrasing, time phrases, priority and
+// category keywords, the word for "and", and imperative-verb signals for line splitting).
+// `RuleBasedExtractionService.languageTables` is the single place new languages get added —
+// everything else in this file is generic engine code that operates on whichever tables are
+// selected for a given line.
+
+struct WeekdayPhraseRule: Sendable {
+    let pattern: String   // exactly one capture group: the weekday name
+    let skipToday: Bool   // true = "next <weekday>" semantics; false = nearest occurrence including today
+    let confidence: Double
+}
+
+struct LanguageRules: Sendable {
+    let code: String
+    let weekdayNames: [String: Int]              // lowercase name -> Calendar weekday (1=Sun...7=Sat)
+    let todayWords: [String]
+    let tomorrowWords: [String]
+    let dayAfterTomorrowWords: [String]
+    let numberWords: [String: Int]                // spelled-out small numbers used by the two patterns below
+    let inDaysPattern: String?                    // regex, capture group 1 = number token (digits or a numberWords key)
+    let inWeeksPattern: String?
+    let weekdayPhraseRules: [WeekdayPhraseRule]    // ordered — more specific patterns (e.g. "next <weekday>") before bare weekday
+    let nextWeekPattern: String?
+    let timePattern: String?                      // capture group 1 = hour, group 2 = optional minute
+    let priorityPrefixes: [(pattern: String, priority: TaskPriority)]
+    let categoryKeywords: [TaskCategory: [String]]
+    let connectorWords: [String]                  // leftover words to trim from title edges after stripping a date phrase
+    let conjunctionWords: [String]                // words meaning "and", used for line splitting
+    let imperativeVerbs: Set<String>               // first-word check for splitting
+    let verbSuffixes: [String]                     // last-word suffix check for splitting (e.g. German/Dutch "-en", Polish "-ć")
+}
+
 // MARK: - Service
 //
-// Rules-based extraction per prd-update-01.md §1: no bundled/downloaded model, runs on every
-// device. NSDataDetector covers English-style date phrases; a hand-written German rule set covers
-// colloquial German date phrases NSDataDetector does not reliably parse (§2). Both are always
-// attempted per line — order is chosen by NLLanguageRecognizer's per-line guess, but the other
-// still runs as a fallback so a wrong language guess never silently drops a date (§2).
+// Rules-based extraction per prd-update-01.md §1 / prd-update-02.md §2: no bundled/downloaded
+// model, runs on every device. NSDataDetector is the universal base layer (it understands a
+// surprising amount across locales — e.g. German "15 Uhr" — not just English). Each language's
+// `LanguageRules` table fills that language's specific gaps, tried before the NSDataDetector
+// fallback. The primary language (set once during onboarding, prd-update-02.md §3) is tried
+// first; the per-line `NLLanguageRecognizer` guess is tried second, so mixed-language lines still
+// resolve without requiring per-line detection to carry the whole burden.
 
 struct RuleBasedExtractionService: Sendable {
     static let shared = RuleBasedExtractionService()
@@ -35,67 +72,91 @@ struct RuleBasedExtractionService: Sendable {
         types: NSTextCheckingResult.CheckingType.date.rawValue
     )
 
-    func extract(from input: String, referenceDate: Date = .now) -> [ExtractedTask] {
+    func extract(from input: String, referenceDate: Date = .now, primaryLanguageCode: String = "en") -> [ExtractedTask] {
         input
             .components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
-            .flatMap { extractLine($0, referenceDate: referenceDate) }
+            .flatMap { extractLine($0, referenceDate: referenceDate, primaryLanguageCode: primaryLanguageCode) }
     }
 
-    func extractLine(_ line: String, referenceDate: Date = .now) -> [ExtractedTask] {
-        splitConjunctions(line).map { buildTask(from: $0, referenceDate: referenceDate) }
+    func extractLine(_ line: String, referenceDate: Date = .now, primaryLanguageCode: String = "en") -> [ExtractedTask] {
+        // Language is re-detected per sub-line after splitting, not once for the whole line —
+        // a run-on line can genuinely mix languages either side of "and"/"und"/etc., and each
+        // half deserves its own best-guess candidate list for date/priority/category matching.
+        // The whole-line guess is still what drives the split decision itself, since we don't
+        // know the sub-lines yet at that point.
+        let splitRulesList = candidateRules(for: line, primaryLanguageCode: primaryLanguageCode)
+        return splitConjunctions(line, rulesList: splitRulesList).map { subLine in
+            let rulesList = candidateRules(for: subLine, primaryLanguageCode: primaryLanguageCode)
+            return buildTask(from: subLine, referenceDate: referenceDate, rulesList: rulesList)
+        }
+    }
+
+    private func candidateRules(for line: String, primaryLanguageCode: String) -> [LanguageRules] {
+        var codes = [primaryLanguageCode]
+        let detected = detectLanguage(line).rawValue
+        if detected != primaryLanguageCode { codes.append(detected) }
+        return codes.compactMap { Self.languageTables[$0] }
     }
 
     // MARK: - Per-sub-line task assembly
 
-    private func buildTask(from rawSubLine: String, referenceDate: Date) -> ExtractedTask {
+    private func buildTask(from rawSubLine: String, referenceDate: Date, rulesList: [LanguageRules]) -> ExtractedTask {
         var text = rawSubLine
 
         var priority: TaskPriority?
         (text, priority) = stripBangPriority(text)
         if priority == nil {
-            (text, priority) = applyPriorityKeywords(text)
+            for rules in rulesList {
+                guard let (remaining, matched) = applyPriorityKeywords(text, rules: rules) else { continue }
+                text = remaining
+                priority = matched
+                break
+            }
         }
 
         var category: TaskCategory?
-        category = applyCategoryKeywords(text)
+        for rules in rulesList {
+            if let matched = applyCategoryKeywords(text, rules: rules) {
+                category = matched
+                break
+            }
+        }
 
-        let language = detectLanguage(text)
         var dueDate: String?
         var dueTime: String?
         var confidence = 1.0
         var rangesToStrip: [Range<String.Index>] = []
+        var dateFound = false
 
-        let germanFirst = language == .german
-
-        func tryGerman() -> Bool {
-            guard let match = germanDateMatch(in: text, referenceDate: referenceDate) else { return false }
+        for rules in rulesList {
+            guard let match = customDateMatch(in: text, referenceDate: referenceDate, rules: rules) else { continue }
             dueDate = isoDate(match.date)
             confidence = match.confidence
             rangesToStrip.append(match.range)
-            return true
+            dateFound = true
+            break
         }
-        func tryEnglish() -> Bool {
-            let match = englishDateMatch(in: text, referenceDate: referenceDate)
-                ?? englishCustomDateMatch(in: text, referenceDate: referenceDate)
-            guard let match else { return false }
+        if !dateFound, let match = englishDateMatch(in: text) {
             dueDate = isoDate(match.date)
             dueTime = match.time
             confidence = match.confidence
             rangesToStrip.append(match.range)
-            return true
+            dateFound = true
         }
 
-        let dateFound = germanFirst ? (tryGerman() || tryEnglish()) : (tryEnglish() || tryGerman())
-
-        if dueTime == nil, let timeMatch = germanTimeMatch(in: text) {
-            dueTime = timeMatch.time
-            rangesToStrip.append(timeMatch.range)
+        if dueTime == nil {
+            for rules in rulesList {
+                guard let timeMatch = customTimeMatch(in: text, rules: rules) else { continue }
+                dueTime = timeMatch.time
+                rangesToStrip.append(timeMatch.range)
+                break
+            }
         }
 
         let stripped = removeRanges(rangesToStrip, from: text)
-        let title = cleanTitle(stripped, fallback: rawSubLine)
+        let title = cleanTitle(stripped, fallback: rawSubLine, rulesList: rulesList)
 
         return ExtractedTask(
             title: title,
@@ -117,36 +178,31 @@ struct RuleBasedExtractionService: Sendable {
 
     // MARK: - Line splitting on conjunctions (§3)
 
-    private func splitConjunctions(_ line: String) -> [String] {
-        for separator in [" and ", " und "] {
+    private func splitConjunctions(_ line: String, rulesList: [LanguageRules]) -> [String] {
+        let conjunctions = Set(rulesList.flatMap(\.conjunctionWords))
+        for word in conjunctions {
+            let separator = " \(word) "
             guard let range = line.range(of: separator, options: .caseInsensitive) else { continue }
             let before = String(line[line.startIndex..<range.lowerBound]).trimmingCharacters(in: .whitespaces)
             let after = String(line[range.upperBound...]).trimmingCharacters(in: .whitespaces)
             guard before.split(separator: " ").count >= 2,
                   after.split(separator: " ").count >= 2,
-                  containsVerb(before), containsVerb(after) else { continue }
+                  containsVerb(before, rulesList: rulesList), containsVerb(after, rulesList: rulesList) else { continue }
             return [before, after]
         }
         return [line]
     }
 
-    // NLTagger's POS model is unreliable on 2-3 word context-free imperative fragments ("call
-    // max", "book the conference room") — it tends to default ambiguous words like "book" to
-    // their more common noun sense. A curated imperative-verb list is a much stronger signal at
-    // this length, checked before falling back to NLTagger.
-    private static let englishImperativeVerbs: Set<String> = [
-        "call", "buy", "finish", "deploy", "write", "prepare", "book", "pay", "clean", "reply",
-        "send", "schedule", "review", "fix", "renew", "cancel", "water", "tidy", "return", "pick",
-        "think", "do", "get", "make", "take", "bring", "check", "confirm", "submit", "order",
-        "drop", "pack", "email", "text", "message", "update", "install", "download", "upload",
-    ]
-
-    private func containsVerb(_ text: String) -> Bool {
+    // Curated per-language verb signals are checked before NLTagger, which is unreliable on 2-3
+    // word context-free imperative fragments ("call max", "book the conference room") — it tends
+    // to default ambiguous words to their more common noun sense.
+    private func containsVerb(_ text: String, rulesList: [LanguageRules]) -> Bool {
         let words = text.split(separator: " ").map { $0.lowercased() }
-        if let first = words.first, Self.englishImperativeVerbs.contains(first) { return true }
-        // German task notes are frequently noun-first, infinitive-last ("termin absagen") —
-        // infinitives reliably end in "en", a stronger signal here than generic POS tagging.
-        if let last = words.last, last.count >= 4, last.hasSuffix("en") { return true }
+        guard let first = words.first, let last = words.last else { return false }
+        for rules in rulesList {
+            if rules.imperativeVerbs.contains(first) { return true }
+            if last.count >= 4, rules.verbSuffixes.contains(where: { !$0.isEmpty && last.hasSuffix($0) }) { return true }
+        }
 
         let tagger = NLTagger(tagSchemes: [.lexicalClass])
         tagger.string = text
@@ -158,7 +214,7 @@ struct RuleBasedExtractionService: Sendable {
         return found
     }
 
-    // MARK: - Priority (§6 + keyword signals)
+    // MARK: - Priority (§6 + per-language keyword signals)
 
     private func stripBangPriority(_ text: String) -> (String, TaskPriority?) {
         let trimmed = text.trimmingCharacters(in: .whitespaces)
@@ -168,36 +224,23 @@ struct RuleBasedExtractionService: Sendable {
         return (stripped.trimmingCharacters(in: .whitespaces), .high)
     }
 
-    private static let priorityPrefixes: [(pattern: String, priority: TaskPriority)] = [
-        (#"^(urgent|asap|dringend)[:\-–—]?\s*"#, .high),
-        (#"^(high priority|hohe priorität)[:\-–—]?\s*"#, .high),
-        (#"^(low priority|niedrige priorität|whenever)[:\-–—]?\s*"#, .low),
-    ]
-
-    private func applyPriorityKeywords(_ text: String) -> (String, TaskPriority?) {
+    private func applyPriorityKeywords(_ text: String, rules: LanguageRules) -> (String, TaskPriority)? {
         let nsRange = NSRange(text.startIndex..., in: text)
-        for rule in Self.priorityPrefixes {
+        for rule in rules.priorityPrefixes {
             guard let regex = try? NSRegularExpression(pattern: rule.pattern, options: [.caseInsensitive]),
                   let match = regex.firstMatch(in: text, range: nsRange),
                   let range = Range(match.range, in: text),
                   range.lowerBound == text.startIndex else { continue }
             return (String(text[range.upperBound...]), rule.priority)
         }
-        return (text, nil)
+        return nil
     }
 
     // MARK: - Category keywords
 
-    private static let categoryKeywords: [TaskCategory: [String]] = [
-        .work: ["work", "meeting", "deadline", "project", "client", "office", "kickoff", "büro", "arbeit", "projekt"],
-        .health: ["doctor", "dentist", "gym", "workout", "appointment", "arzt", "zahnarzt", "termin", "fitness", "membership"],
-        .shopping: ["buy", "groceries", "shopping", "store", "kaufen", "einkaufen"],
-        .finance: ["pay", "bill", "invoice", "bank", "rechnung", "bezahlen", "steuer", "tax"],
-    ]
-
-    private func applyCategoryKeywords(_ text: String) -> TaskCategory? {
+    private func applyCategoryKeywords(_ text: String, rules: LanguageRules) -> TaskCategory? {
         let lower = text.lowercased()
-        for (category, words) in Self.categoryKeywords {
+        for (category, words) in rules.categoryKeywords {
             for word in words {
                 let pattern = "\\b\(NSRegularExpression.escapedPattern(for: word))\\b"
                 if lower.range(of: pattern, options: .regularExpression) != nil {
@@ -222,11 +265,10 @@ struct RuleBasedExtractionService: Sendable {
         let time: String
     }
 
-    // `referenceDate` is intentionally unused here: NSDataDetector has no public API to override
-    // its notion of "today" — it always resolves relative to the real device clock. Callers (and
-    // the test corpus) must treat English relative dates as anchored to the actual current date,
-    // never a frozen historical one. The German rules below, being hand-written, do honor it.
-    private func englishDateMatch(in text: String, referenceDate: Date) -> DateMatch? {
+    // NSDataDetector has no public API to override its notion of "today" — it always resolves
+    // relative to the real device/CI clock. Callers (and the test corpus) must treat dates it
+    // finds as anchored to the actual current date, never a frozen historical one.
+    private func englishDateMatch(in text: String) -> DateMatch? {
         guard let detector = Self.dataDetector else { return nil }
         let nsRange = NSRange(text.startIndex..., in: text)
         guard let match = detector.matches(in: text, options: [], range: nsRange).first,
@@ -249,19 +291,12 @@ struct RuleBasedExtractionService: Sendable {
         return formattedTime(from: date)
     }
 
-    private static let englishNumberWords: [String: Int] = [
-        "a": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
-        "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
-    ]
-
-    // Confirmed via the Milestone 0 corpus run: NSDataDetector doesn't parse "next week" at all,
-    // and only handles "in N days/weeks" when N is a numeral, not spelled out ("in two days").
-    // These gaps get a small hand-written fallback, same approach as the German rules, and (unlike
-    // NSDataDetector) these do honor `referenceDate`.
-    private func englishCustomDateMatch(in text: String, referenceDate: Date) -> DateMatch? {
+    // Generic engine over a single language's rule table. Order: day-after-tomorrow / today /
+    // tomorrow (exact words) -> "in N days/weeks" -> weekday phrases (caller orders specific
+    // patterns like "next <weekday>" before the bare-weekday catch-all) -> "next week".
+    private func customDateMatch(in text: String, referenceDate: Date, rules: LanguageRules) -> DateMatch? {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: referenceDate)
-        let number = "(\\d+|" + Self.englishNumberWords.keys.joined(separator: "|") + ")"
 
         struct Rule {
             let pattern: String
@@ -269,25 +304,56 @@ struct RuleBasedExtractionService: Sendable {
             let resolve: (NSTextCheckingResult, String) -> Date
         }
 
-        func count(_ match: NSTextCheckingResult, _ source: String) -> Int {
-            let raw = (source as NSString).substring(with: match.range(at: 1)).lowercased()
-            return Int(raw) ?? Self.englishNumberWords[raw] ?? 1
+        func wordAlternation(_ words: [String]) -> String? {
+            guard !words.isEmpty else { return nil }
+            return words.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
         }
 
-        let rules: [Rule] = [
-            Rule(pattern: #"\bnext week\b"#, confidence: 0.85) { _, _ in
+        func numberValue(_ match: NSTextCheckingResult, _ source: String) -> Int {
+            let raw = (source as NSString).substring(with: match.range(at: 1)).lowercased()
+            return Int(raw) ?? rules.numberWords[raw] ?? 1
+        }
+
+        var ruleList: [Rule] = []
+
+        if let alt = wordAlternation(rules.dayAfterTomorrowWords) {
+            ruleList.append(Rule(pattern: "\\b(\(alt))\\b", confidence: 0.9) { _, _ in
+                calendar.date(byAdding: .day, value: 2, to: today)!
+            })
+        }
+        if let alt = wordAlternation(rules.todayWords) {
+            ruleList.append(Rule(pattern: "\\b(\(alt))\\b", confidence: 0.9) { _, _ in today })
+        }
+        if let alt = wordAlternation(rules.tomorrowWords) {
+            ruleList.append(Rule(pattern: "\\b(\(alt))\\b", confidence: 0.85) { _, _ in
+                calendar.date(byAdding: .day, value: 1, to: today)!
+            })
+        }
+        if let pattern = rules.inDaysPattern {
+            ruleList.append(Rule(pattern: pattern, confidence: 0.85) { match, source in
+                calendar.date(byAdding: .day, value: numberValue(match, source), to: today)!
+            })
+        }
+        if let pattern = rules.inWeeksPattern {
+            ruleList.append(Rule(pattern: pattern, confidence: 0.85) { match, source in
+                calendar.date(byAdding: .day, value: numberValue(match, source) * 7, to: today)!
+            })
+        }
+        for weekdayRule in rules.weekdayPhraseRules {
+            ruleList.append(Rule(pattern: weekdayRule.pattern, confidence: weekdayRule.confidence) { match, source in
+                let name = (source as NSString).substring(with: match.range(at: 1)).lowercased()
+                let weekday = rules.weekdayNames[name] ?? 2
+                return nextOccurrence(of: weekday, from: today, calendar: calendar, skipToday: weekdayRule.skipToday)
+            })
+        }
+        if let pattern = rules.nextWeekPattern {
+            ruleList.append(Rule(pattern: pattern, confidence: 0.5) { _, _ in
                 calendar.date(byAdding: .day, value: 7, to: today)!
-            },
-            Rule(pattern: "\\bin\\s+\(number)\\s+days?\\b", confidence: 0.85) { match, source in
-                calendar.date(byAdding: .day, value: count(match, source), to: today)!
-            },
-            Rule(pattern: "\\bin\\s+\(number)\\s+weeks?\\b", confidence: 0.85) { match, source in
-                calendar.date(byAdding: .day, value: count(match, source) * 7, to: today)!
-            },
-        ]
+            })
+        }
 
         let nsRange = NSRange(text.startIndex..., in: text)
-        for rule in rules {
+        for rule in ruleList {
             guard let regex = try? NSRegularExpression(pattern: rule.pattern, options: [.caseInsensitive]),
                   let match = regex.firstMatch(in: text, range: nsRange),
                   let range = Range(match.range, in: text) else { continue }
@@ -296,77 +362,16 @@ struct RuleBasedExtractionService: Sendable {
         return nil
     }
 
-    private static let germanWeekdays: [String: Int] = [
-        "sonntag": 1, "montag": 2, "dienstag": 3, "mittwoch": 4,
-        "donnerstag": 5, "freitag": 6, "samstag": 7, "sonnabend": 7,
-    ]
-
-    private func germanDateMatch(in text: String, referenceDate: Date) -> DateMatch? {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: referenceDate)
-        let weekdayNames = Self.germanWeekdays.keys.joined(separator: "|")
-
-        struct Rule {
-            let pattern: String
-            let confidence: Double
-            let resolve: (NSTextCheckingResult, String) -> Date
-        }
-
-        let rules: [Rule] = [
-            Rule(pattern: #"\bübermorgen\b"#, confidence: 0.9) { _, _ in
-                calendar.date(byAdding: .day, value: 2, to: today)!
-            },
-            Rule(pattern: #"\bheute\b"#, confidence: 0.9) { _, _ in today },
-            Rule(pattern: #"\bmorgen\b"#, confidence: 0.85) { _, _ in
-                calendar.date(byAdding: .day, value: 1, to: today)!
-            },
-            Rule(pattern: #"\bin\s+(\d+)\s+tagen\b"#, confidence: 0.85) { match, source in
-                let n = Int((source as NSString).substring(with: match.range(at: 1))) ?? 1
-                return calendar.date(byAdding: .day, value: n, to: today)!
-            },
-            Rule(pattern: #"\bin\s+(\d+)\s+wochen\b"#, confidence: 0.85) { match, source in
-                let n = Int((source as NSString).substring(with: match.range(at: 1))) ?? 1
-                return calendar.date(byAdding: .day, value: n * 7, to: today)!
-            },
-            Rule(pattern: #"\b(nächsten|nächste|kommenden|kommende)\s+(\#(weekdayNames))\b"#, confidence: 0.85) { match, source in
-                let name = (source as NSString).substring(with: match.range(at: 2)).lowercased()
-                return nextOccurrence(of: Self.germanWeekdays[name] ?? 2, from: today, calendar: calendar, skipToday: true)
-            },
-            Rule(pattern: #"\b(diesen|diese)\s+(\#(weekdayNames))\b"#, confidence: 0.85) { match, source in
-                let name = (source as NSString).substring(with: match.range(at: 2)).lowercased()
-                return nextOccurrence(of: Self.germanWeekdays[name] ?? 2, from: today, calendar: calendar, skipToday: false)
-            },
-            Rule(pattern: #"\bnächste\s+woche\b"#, confidence: 0.5) { _, _ in
-                calendar.date(byAdding: .day, value: 7, to: today)!
-            },
-            Rule(pattern: #"\b(\#(weekdayNames))\b"#, confidence: 0.6) { match, source in
-                let name = (source as NSString).substring(with: match.range).lowercased()
-                return nextOccurrence(of: Self.germanWeekdays[name] ?? 2, from: today, calendar: calendar, skipToday: false)
-            },
-        ]
-
-        let nsRange = NSRange(text.startIndex..., in: text)
-        for rule in rules {
-            guard let regex = try? NSRegularExpression(pattern: rule.pattern, options: [.caseInsensitive]),
-                  let match = regex.firstMatch(in: text, range: nsRange),
-                  let range = Range(match.range, in: text) else { continue }
-            let date = rule.resolve(match, text)
-            return DateMatch(range: range, date: date, time: nil, confidence: rule.confidence)
-        }
-        return nil
-    }
-
-    private func germanTimeMatch(in text: String) -> TimeMatch? {
-        guard let regex = try? NSRegularExpression(pattern: #"\bum\s+(\d{1,2})(?:[:.](\d{2}))?\s*uhr\b"#, options: [.caseInsensitive]) else { return nil }
+    private func customTimeMatch(in text: String, rules: LanguageRules) -> TimeMatch? {
+        guard let pattern = rules.timePattern,
+              let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return nil }
         let nsRange = NSRange(text.startIndex..., in: text)
         guard let match = regex.firstMatch(in: text, range: nsRange), let range = Range(match.range, in: text) else { return nil }
         let ns = text as NSString
         let hour = Int(ns.substring(with: match.range(at: 1))) ?? 0
-        let minute: Int
-        if match.range(at: 2).location != NSNotFound {
+        var minute = 0
+        if match.numberOfRanges > 2, match.range(at: 2).location != NSNotFound {
             minute = Int(ns.substring(with: match.range(at: 2))) ?? 0
-        } else {
-            minute = 0
         }
         return TimeMatch(range: range, time: String(format: "%02d:%02d", hour, minute))
     }
@@ -399,19 +404,19 @@ struct RuleBasedExtractionService: Sendable {
         return result
     }
 
-    private static let leftoverConnectors: Set<String> = [
-        "on", "at", "by", "for", "this", "next", "am", "um", "den", "der", "die", "das", "-", "–", "—", ":",
-    ]
+    private static let universalConnectors: Set<String> = [",", "-", "–", "—", ":", ";", "."]
 
-    private func cleanTitle(_ text: String, fallback: String) -> String {
+    private func cleanTitle(_ text: String, fallback: String, rulesList: [LanguageRules]) -> String {
+        let connectors = Self.universalConnectors.union(rulesList.flatMap(\.connectorWords).map { $0.lowercased() })
+
         var cleaned = text.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
         cleaned = cleaned.trimmingCharacters(in: CharacterSet(charactersIn: " ,–—-:;."))
 
         var words = cleaned.split(separator: " ").map(String.init)
-        while let first = words.first, Self.leftoverConnectors.contains(first.lowercased()) {
+        while let first = words.first, connectors.contains(first.lowercased()) {
             words.removeFirst()
         }
-        while let last = words.last, Self.leftoverConnectors.contains(last.lowercased()) {
+        while let last = words.last, connectors.contains(last.lowercased()) {
             words.removeLast()
         }
         cleaned = words.joined(separator: " ")
@@ -429,4 +434,326 @@ private func nextOccurrence(of weekday: Int, from referenceDate: Date, calendar:
     var delta = (weekday - todayWeekday + 7) % 7
     if delta == 0 && skipToday { delta = 7 }
     return calendar.date(byAdding: .day, value: delta, to: referenceDate)!
+}
+
+// MARK: - Language tables (prd-update-02.md §4 — Batch 0: en/de, Batch 1: fr/es/it/pt/nl/pl)
+
+extension RuleBasedExtractionService {
+    static let languageTables: [String: LanguageRules] = {
+        var tables: [String: LanguageRules] = [:]
+        for rules in [englishRules, germanRules, frenchRules, spanishRules, italianRules, portugueseRules, dutchRules, polishRules] {
+            tables[rules.code] = rules
+        }
+        return tables
+    }()
+
+    private static let punctSep = #"[:\-–—]?\s*"#
+
+    private static let englishRules = LanguageRules(
+        code: "en",
+        weekdayNames: [:],
+        todayWords: [],
+        tomorrowWords: [],
+        dayAfterTomorrowWords: [],
+        numberWords: ["a": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10],
+        inDaysPattern: #"\bin\s+(\d+|a|one|two|three|four|five|six|seven|eight|nine|ten)\s+days?\b"#,
+        inWeeksPattern: #"\bin\s+(\d+|a|one|two|three|four|five|six|seven|eight|nine|ten)\s+weeks?\b"#,
+        weekdayPhraseRules: [],
+        nextWeekPattern: #"\bnext week\b"#,
+        timePattern: nil,
+        priorityPrefixes: [
+            (#"^(urgent|asap)\#(punctSep)"#, .high),
+            (#"^(high priority)\#(punctSep)"#, .high),
+            (#"^(low priority|whenever)\#(punctSep)"#, .low),
+        ],
+        categoryKeywords: [
+            .work: ["work", "meeting", "deadline", "project", "client", "office", "kickoff"],
+            .health: ["doctor", "dentist", "gym", "workout", "appointment", "fitness", "membership"],
+            .shopping: ["buy", "groceries", "shopping", "store"],
+            .finance: ["pay", "bill", "invoice", "bank", "tax"],
+        ],
+        connectorWords: ["on", "at", "by", "for", "this", "next", "am"],
+        conjunctionWords: ["and"],
+        imperativeVerbs: [
+            "call", "buy", "finish", "deploy", "write", "prepare", "book", "pay", "clean", "reply",
+            "send", "schedule", "review", "fix", "renew", "cancel", "water", "tidy", "return", "pick",
+            "think", "do", "get", "make", "take", "bring", "check", "confirm", "submit", "order",
+            "drop", "pack", "email", "text", "message", "update", "install", "download", "upload",
+        ],
+        verbSuffixes: []
+    )
+
+    private static let germanRules = LanguageRules(
+        code: "de",
+        weekdayNames: [
+            "sonntag": 1, "montag": 2, "dienstag": 3, "mittwoch": 4,
+            "donnerstag": 5, "freitag": 6, "samstag": 7, "sonnabend": 7,
+        ],
+        todayWords: ["heute"],
+        tomorrowWords: ["morgen"],
+        dayAfterTomorrowWords: ["übermorgen"],
+        numberWords: [:],
+        inDaysPattern: #"\bin\s+(\d+)\s+tagen\b"#,
+        inWeeksPattern: #"\bin\s+(\d+)\s+wochen\b"#,
+        weekdayPhraseRules: [
+            WeekdayPhraseRule(pattern: #"\b(?:nächsten|nächste|kommenden|kommende)\s+(sonntag|montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonnabend)\b"#, skipToday: true, confidence: 0.85),
+            WeekdayPhraseRule(pattern: #"\b(?:diesen|diese)\s+(sonntag|montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonnabend)\b"#, skipToday: false, confidence: 0.85),
+            WeekdayPhraseRule(pattern: #"\b(sonntag|montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonnabend)\b"#, skipToday: false, confidence: 0.6),
+        ],
+        nextWeekPattern: #"\bnächste\s+woche\b"#,
+        timePattern: #"\bum\s+(\d{1,2})(?:[:.](\d{2}))?\s*uhr\b"#,
+        priorityPrefixes: [
+            (#"^(dringend)\#(punctSep)"#, .high),
+            (#"^(hohe priorität)\#(punctSep)"#, .high),
+            (#"^(niedrige priorität)\#(punctSep)"#, .low),
+        ],
+        categoryKeywords: [
+            .work: ["büro", "arbeit", "projekt", "kickoff"],
+            .health: ["arzt", "zahnarzt", "termin", "fitness"],
+            .shopping: ["kaufen", "einkaufen"],
+            .finance: ["rechnung", "bezahlen", "steuer"],
+        ],
+        connectorWords: ["am", "um", "den", "der", "die", "das"],
+        conjunctionWords: ["und"],
+        imperativeVerbs: [],
+        verbSuffixes: ["en"]
+    )
+
+    private static let frenchRules = LanguageRules(
+        code: "fr",
+        weekdayNames: [
+            "dimanche": 1, "lundi": 2, "mardi": 3, "mercredi": 4,
+            "jeudi": 5, "vendredi": 6, "samedi": 7,
+        ],
+        todayWords: ["aujourd'hui"],
+        tomorrowWords: ["demain"],
+        dayAfterTomorrowWords: ["après-demain"],
+        numberWords: ["un": 1, "deux": 2, "trois": 3, "quatre": 4, "cinq": 5, "six": 6, "sept": 7, "huit": 8, "neuf": 9, "dix": 10],
+        inDaysPattern: #"\bdans\s+(\d+|un|deux|trois|quatre|cinq|six|sept|huit|neuf|dix)\s+jours?\b"#,
+        inWeeksPattern: #"\bdans\s+(\d+|un|deux|trois|quatre|cinq|six|sept|huit|neuf|dix)\s+semaines?\b"#,
+        weekdayPhraseRules: [
+            WeekdayPhraseRule(pattern: #"\b(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)\s+prochain\b"#, skipToday: true, confidence: 0.85),
+            WeekdayPhraseRule(pattern: #"\bce\s+(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)\b"#, skipToday: false, confidence: 0.85),
+            WeekdayPhraseRule(pattern: #"\b(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)\b"#, skipToday: false, confidence: 0.6),
+        ],
+        nextWeekPattern: #"\bsemaine\s+prochaine\b"#,
+        timePattern: #"\bà\s+(\d{1,2})\s*h\s*(\d{2})?\b"#,
+        priorityPrefixes: [
+            (#"^(urgent|asap|priorité haute|haute priorité)\#(punctSep)"#, .high),
+            (#"^(priorité basse|basse priorité|faible priorité)\#(punctSep)"#, .low),
+        ],
+        categoryKeywords: [
+            .work: ["travail", "réunion", "projet", "client", "bureau"],
+            .health: ["médecin", "dentiste", "rendez-vous", "gym", "santé"],
+            .shopping: ["acheter", "courses", "magasin"],
+            .finance: ["payer", "facture", "banque", "impôts"],
+        ],
+        connectorWords: ["à", "de", "le", "la"],
+        conjunctionWords: ["et"],
+        imperativeVerbs: [
+            "appeler", "acheter", "finir", "préparer", "réserver", "payer", "nettoyer", "répondre",
+            "envoyer", "planifier", "réviser", "réparer", "renouveler", "annuler", "arroser",
+            "ranger", "rendre", "prendre", "penser", "faire", "apporter", "vérifier", "confirmer",
+            "soumettre", "commander",
+        ],
+        verbSuffixes: []
+    )
+
+    private static let spanishRules = LanguageRules(
+        code: "es",
+        weekdayNames: [
+            "domingo": 1, "lunes": 2, "martes": 3, "miércoles": 4,
+            "jueves": 5, "viernes": 6, "sábado": 7,
+        ],
+        todayWords: ["hoy"],
+        tomorrowWords: ["mañana"],
+        dayAfterTomorrowWords: ["pasado mañana"],
+        numberWords: ["un": 1, "uno": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5, "seis": 6, "siete": 7, "ocho": 8, "nueve": 9, "diez": 10],
+        inDaysPattern: #"\ben\s+(\d+|un|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+días?\b"#,
+        inWeeksPattern: #"\ben\s+(\d+|un|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+semanas?\b"#,
+        weekdayPhraseRules: [
+            WeekdayPhraseRule(pattern: #"\bpróximo\s+(lunes|martes|miércoles|jueves|viernes|sábado|domingo)\b"#, skipToday: true, confidence: 0.85),
+            WeekdayPhraseRule(pattern: #"\beste\s+(lunes|martes|miércoles|jueves|viernes|sábado|domingo)\b"#, skipToday: false, confidence: 0.85),
+            WeekdayPhraseRule(pattern: #"\b(lunes|martes|miércoles|jueves|viernes|sábado|domingo)\b"#, skipToday: false, confidence: 0.6),
+        ],
+        nextWeekPattern: #"\bpróxima\s+semana\b"#,
+        timePattern: #"\ba\s+las\s+(\d{1,2})(?::(\d{2}))?\b"#,
+        priorityPrefixes: [
+            (#"^(urgente|asap|alta prioridad|prioridad alta)\#(punctSep)"#, .high),
+            (#"^(baja prioridad|prioridad baja)\#(punctSep)"#, .low),
+        ],
+        categoryKeywords: [
+            .work: ["trabajo", "reunión", "proyecto", "cliente", "oficina"],
+            .health: ["médico", "dentista", "cita", "gimnasio", "salud"],
+            .shopping: ["comprar", "compras", "tienda"],
+            .finance: ["pagar", "factura", "banco", "impuestos"],
+        ],
+        connectorWords: ["a", "el", "la", "las"],
+        conjunctionWords: ["y"],
+        imperativeVerbs: [
+            "llamar", "comprar", "terminar", "preparar", "reservar", "pagar", "limpiar", "responder",
+            "enviar", "programar", "revisar", "arreglar", "renovar", "cancelar", "regar", "ordenar",
+            "devolver", "recoger", "pensar", "hacer", "traer", "comprobar", "confirmar",
+        ],
+        verbSuffixes: []
+    )
+
+    private static let italianRules = LanguageRules(
+        code: "it",
+        weekdayNames: [
+            "domenica": 1, "lunedì": 2, "martedì": 3, "mercoledì": 4,
+            "giovedì": 5, "venerdì": 6, "sabato": 7,
+        ],
+        todayWords: ["oggi"],
+        tomorrowWords: ["domani"],
+        dayAfterTomorrowWords: ["dopodomani"],
+        numberWords: ["un": 1, "due": 2, "tre": 3, "quattro": 4, "cinque": 5, "sei": 6, "sette": 7, "otto": 8, "nove": 9, "dieci": 10],
+        inDaysPattern: #"\btra\s+(\d+|un|due|tre|quattro|cinque|sei|sette|otto|nove|dieci)\s+giorni\b"#,
+        inWeeksPattern: #"\btra\s+(\d+|un|due|tre|quattro|cinque|sei|sette|otto|nove|dieci)\s+settimane\b"#,
+        weekdayPhraseRules: [
+            WeekdayPhraseRule(pattern: #"\b(lunedì|martedì|mercoledì|giovedì|venerdì|sabato|domenica)\s+prossimo\b"#, skipToday: true, confidence: 0.85),
+            WeekdayPhraseRule(pattern: #"\bquesto\s+(lunedì|martedì|mercoledì|giovedì|venerdì|sabato|domenica)\b"#, skipToday: false, confidence: 0.85),
+            WeekdayPhraseRule(pattern: #"\b(lunedì|martedì|mercoledì|giovedì|venerdì|sabato|domenica)\b"#, skipToday: false, confidence: 0.6),
+        ],
+        nextWeekPattern: #"\bprossima\s+settimana\b"#,
+        timePattern: #"\balle\s+(\d{1,2})(?::(\d{2}))?\b"#,
+        priorityPrefixes: [
+            (#"^(urgente|asap|alta priorità)\#(punctSep)"#, .high),
+            (#"^(bassa priorità)\#(punctSep)"#, .low),
+        ],
+        categoryKeywords: [
+            .work: ["lavoro", "riunione", "progetto", "cliente", "ufficio"],
+            .health: ["medico", "dentista", "appuntamento", "palestra", "salute"],
+            .shopping: ["comprare", "spesa", "negozio"],
+            .finance: ["pagare", "fattura", "banca", "tasse"],
+        ],
+        connectorWords: ["a", "il", "la", "lo"],
+        conjunctionWords: ["e"],
+        imperativeVerbs: [
+            "chiamare", "comprare", "finire", "preparare", "prenotare", "pagare", "pulire",
+            "rispondere", "inviare", "programmare", "rivedere", "riparare", "rinnovare",
+            "cancellare", "annaffiare", "riordinare", "restituire", "ritirare", "pensare", "fare",
+            "portare", "controllare", "confermare",
+        ],
+        verbSuffixes: []
+    )
+
+    private static let portugueseRules = LanguageRules(
+        code: "pt",
+        weekdayNames: [
+            "domingo": 1, "segunda": 2, "terça": 3, "quarta": 4,
+            "quinta": 5, "sexta": 6, "sábado": 7,
+        ],
+        todayWords: ["hoje"],
+        tomorrowWords: ["amanhã"],
+        dayAfterTomorrowWords: ["depois de amanhã"],
+        numberWords: ["um": 1, "dois": 2, "três": 3, "quatro": 4, "cinco": 5, "seis": 6, "sete": 7, "oito": 8, "nove": 9, "dez": 10],
+        inDaysPattern: #"\bem\s+(\d+|um|dois|três|quatro|cinco|seis|sete|oito|nove|dez)\s+dias\b"#,
+        inWeeksPattern: #"\bem\s+(\d+|um|dois|três|quatro|cinco|seis|sete|oito|nove|dez)\s+semanas\b"#,
+        weekdayPhraseRules: [
+            WeekdayPhraseRule(pattern: #"\bpróxim[oa]\s+(segunda|terça|quarta|quinta|sexta|sábado|domingo)\b"#, skipToday: true, confidence: 0.85),
+            WeekdayPhraseRule(pattern: #"\best[ae]\s+(segunda|terça|quarta|quinta|sexta|sábado|domingo)\b"#, skipToday: false, confidence: 0.85),
+            WeekdayPhraseRule(pattern: #"\b(segunda|terça|quarta|quinta|sexta|sábado|domingo)\b"#, skipToday: false, confidence: 0.6),
+        ],
+        nextWeekPattern: #"\bpróxima\s+semana\b"#,
+        timePattern: #"\bàs\s+(\d{1,2})[h:](\d{2})?\b"#,
+        priorityPrefixes: [
+            (#"^(urgente|asap|alta prioridade)\#(punctSep)"#, .high),
+            (#"^(baixa prioridade)\#(punctSep)"#, .low),
+        ],
+        categoryKeywords: [
+            .work: ["trabalho", "reunião", "projeto", "cliente", "escritório"],
+            .health: ["médico", "dentista", "consulta", "academia", "saúde"],
+            .shopping: ["comprar", "compras", "loja"],
+            .finance: ["pagar", "fatura", "banco", "impostos"],
+        ],
+        connectorWords: ["a", "o", "às", "de"],
+        conjunctionWords: ["e"],
+        imperativeVerbs: [
+            "ligar", "comprar", "terminar", "preparar", "reservar", "pagar", "limpar", "responder",
+            "enviar", "agendar", "revisar", "consertar", "renovar", "cancelar", "regar", "arrumar",
+            "devolver", "buscar", "pensar", "fazer", "trazer", "verificar", "confirmar",
+        ],
+        verbSuffixes: []
+    )
+
+    private static let dutchRules = LanguageRules(
+        code: "nl",
+        weekdayNames: [
+            "zondag": 1, "maandag": 2, "dinsdag": 3, "woensdag": 4,
+            "donderdag": 5, "vrijdag": 6, "zaterdag": 7,
+        ],
+        todayWords: ["vandaag"],
+        tomorrowWords: ["morgen"],
+        dayAfterTomorrowWords: ["overmorgen"],
+        numberWords: ["een": 1, "twee": 2, "drie": 3, "vier": 4, "vijf": 5, "zes": 6, "zeven": 7, "acht": 8, "negen": 9, "tien": 10],
+        inDaysPattern: #"\bover\s+(\d+|een|twee|drie|vier|vijf|zes|zeven|acht|negen|tien)\s+dagen\b"#,
+        inWeeksPattern: #"\bover\s+(\d+|een|twee|drie|vier|vijf|zes|zeven|acht|negen|tien)\s+weken\b"#,
+        weekdayPhraseRules: [
+            WeekdayPhraseRule(pattern: #"\bvolgende\s+(maandag|dinsdag|woensdag|donderdag|vrijdag|zaterdag|zondag)\b"#, skipToday: true, confidence: 0.85),
+            WeekdayPhraseRule(pattern: #"\bdeze\s+(maandag|dinsdag|woensdag|donderdag|vrijdag|zaterdag|zondag)\b"#, skipToday: false, confidence: 0.85),
+            WeekdayPhraseRule(pattern: #"\b(maandag|dinsdag|woensdag|donderdag|vrijdag|zaterdag|zondag)\b"#, skipToday: false, confidence: 0.6),
+        ],
+        nextWeekPattern: #"\bvolgende\s+week\b"#,
+        timePattern: #"\bom\s+(\d{1,2})(?:[:.](\d{2}))?\s*uur\b"#,
+        priorityPrefixes: [
+            (#"^(urgent|asap|hoge prioriteit)\#(punctSep)"#, .high),
+            (#"^(lage prioriteit)\#(punctSep)"#, .low),
+        ],
+        categoryKeywords: [
+            .work: ["werk", "vergadering", "project", "klant", "kantoor"],
+            .health: ["dokter", "tandarts", "afspraak", "sportschool", "gezondheid"],
+            .shopping: ["kopen", "boodschappen", "winkel"],
+            .finance: ["betalen", "factuur", "bank", "belasting"],
+        ],
+        connectorWords: ["op", "om", "de", "het"],
+        conjunctionWords: ["en"],
+        imperativeVerbs: [
+            "bellen", "kopen", "afmaken", "voorbereiden", "boeken", "betalen", "schoonmaken",
+            "antwoorden", "sturen", "plannen", "controleren", "repareren", "verlengen",
+            "annuleren", "opruimen", "terugbrengen", "ophalen", "denken", "doen", "brengen",
+            "bevestigen",
+        ],
+        verbSuffixes: ["en"]
+    )
+
+    private static let polishRules = LanguageRules(
+        code: "pl",
+        weekdayNames: [
+            "niedziela": 1, "poniedziałek": 2, "wtorek": 3, "środa": 4, "środę": 4,
+            "czwartek": 5, "piątek": 6, "sobota": 7, "sobotę": 7,
+        ],
+        todayWords: ["dziś", "dzisiaj"],
+        tomorrowWords: ["jutro"],
+        dayAfterTomorrowWords: ["pojutrze"],
+        numberWords: ["jeden": 1, "dwa": 2, "trzy": 3, "cztery": 4, "pięć": 5, "sześć": 6, "siedem": 7, "osiem": 8, "dziewięć": 9, "dziesięć": 10],
+        inDaysPattern: #"\bza\s+(\d+|jeden|dwa|trzy|cztery|pięć|sześć|siedem|osiem|dziewięć|dziesięć)\s+dni\b"#,
+        inWeeksPattern: #"\bza\s+(\d+|jeden|dwa|trzy|cztery|pięć|sześć|siedem|osiem|dziewięć|dziesięć)\s+tygodni\b"#,
+        weekdayPhraseRules: [
+            WeekdayPhraseRule(pattern: #"\bprzyszły[m]?\s+(poniedziałek|wtorek|środę|czwartek|piątek|sobotę|niedzielę)\b"#, skipToday: true, confidence: 0.75),
+            WeekdayPhraseRule(pattern: #"\bw\s+t[aeo]\s+(poniedziałek|wtorek|środę|czwartek|piątek|sobotę|niedzielę)\b"#, skipToday: false, confidence: 0.7),
+            WeekdayPhraseRule(pattern: #"\b(poniedziałek|wtorek|środa|czwartek|piątek|sobota|niedziela)\b"#, skipToday: false, confidence: 0.6),
+        ],
+        nextWeekPattern: #"\bprzyszłym\s+tygodniu\b"#,
+        timePattern: #"\bo\s+godzinie\s+(\d{1,2})(?::(\d{2}))?\b"#,
+        priorityPrefixes: [
+            (#"^(pilne|asap|wysoki priorytet)\#(punctSep)"#, .high),
+            (#"^(niski priorytet)\#(punctSep)"#, .low),
+        ],
+        categoryKeywords: [
+            .work: ["praca", "spotkanie", "projekt", "klient", "biuro"],
+            .health: ["lekarz", "dentysta", "wizyta", "siłownia", "zdrowie"],
+            .shopping: ["kupić", "zakupy", "sklep"],
+            .finance: ["zapłacić", "faktura", "bank", "podatki"],
+        ],
+        connectorWords: ["w", "na", "o"],
+        conjunctionWords: ["i"],
+        imperativeVerbs: [
+            "zadzwonić", "kupić", "skończyć", "przygotować", "zarezerwować", "zapłacić",
+            "posprzątać", "odpowiedzieć", "wysłać", "zaplanować", "sprawdzić", "naprawić",
+            "odnowić", "anulować", "podlać", "zwrócić", "odebrać", "pomyśleć", "zrobić",
+            "przynieść", "potwierdzić",
+        ],
+        verbSuffixes: ["ć"]
+    )
 }

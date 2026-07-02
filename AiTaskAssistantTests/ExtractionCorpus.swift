@@ -309,4 +309,129 @@ let extractionCorpus: [CorpusCase] = [
         [ExpectedTask(title: "Milk", dueDate: nil, dueTime: nil, priority: nil)],
         [ExpectedTask(title: "Clean the garage", dueDate: nil, dueTime: nil, priority: .low)],
     ]),
+
+    // MARK: Batch 1 languages (prd-update-02.md §4) — French, Spanish, Italian, Portuguese, Dutch, Polish.
+    // Smaller per-language sample than the en/de corpus above, not a full 50-line validation —
+    // enough to exercise each language's core rule table (relative date, weekday phrase, "in N
+    // days", priority prefix, conjunction split) per language, same methodology as Milestone 0.
+
+    // French
+    CorpusCase(id: 53, focus: .language, input: "appeler max demain", expected: [
+        [ExpectedTask(title: "Appeler max", dueDate: offsetDate(1), dueTime: nil, priority: nil)],
+    ]),
+    CorpusCase(id: 54, focus: .language, input: "réunion vendredi prochain", expected: [
+        [ExpectedTask(title: "Réunion", dueDate: nextWeekdayDate(friday, skipToday: true), dueTime: nil, priority: nil)],
+    ]),
+    CorpusCase(id: 55, focus: .language, input: "payer la facture dans 3 jours", expected: [
+        [ExpectedTask(title: "Payer la facture", dueDate: offsetDate(3), dueTime: nil, priority: nil)],
+    ]),
+    CorpusCase(id: 56, focus: .priority, input: "urgent: réparer le site avant la démo", expected: [
+        [ExpectedTask(title: "Réparer le site avant la démo", dueDate: nil, dueTime: nil, priority: .high)],
+    ]),
+    CorpusCase(id: 57, focus: .splitting, input: "acheter du pain et appeler maman", expected: [
+        [
+            ExpectedTask(title: "Acheter du pain", dueDate: nil, dueTime: nil, priority: nil),
+            ExpectedTask(title: "Appeler maman", dueDate: nil, dueTime: nil, priority: nil),
+        ],
+    ]),
+
+    // Spanish
+    CorpusCase(id: 58, focus: .language, input: "llamar a max mañana", expected: [
+        [ExpectedTask(title: "Llamar a max", dueDate: offsetDate(1), dueTime: nil, priority: nil)],
+    ]),
+    CorpusCase(id: 59, focus: .language, input: "reunión próximo lunes", expected: [
+        [ExpectedTask(title: "Reunión", dueDate: nextWeekdayDate(monday, skipToday: true), dueTime: nil, priority: nil)],
+    ]),
+    CorpusCase(id: 60, focus: .language, input: "pagar la factura en 3 días", expected: [
+        [ExpectedTask(title: "Pagar la factura", dueDate: offsetDate(3), dueTime: nil, priority: nil)],
+    ]),
+    CorpusCase(id: 61, focus: .priority, input: "urgente: reparar el sitio antes de la demo", expected: [
+        [ExpectedTask(title: "Reparar el sitio antes de la demo", dueDate: nil, dueTime: nil, priority: .high)],
+    ]),
+    CorpusCase(id: 62, focus: .splitting, input: "comprar pan y llamar a mamá", expected: [
+        [
+            ExpectedTask(title: "Comprar pan", dueDate: nil, dueTime: nil, priority: nil),
+            ExpectedTask(title: "Llamar a mamá", dueDate: nil, dueTime: nil, priority: nil),
+        ],
+    ]),
+
+    // Italian
+    CorpusCase(id: 63, focus: .language, input: "chiamare max domani", expected: [
+        [ExpectedTask(title: "Chiamare max", dueDate: offsetDate(1), dueTime: nil, priority: nil)],
+    ]),
+    CorpusCase(id: 64, focus: .language, input: "riunione lunedì prossimo", expected: [
+        [ExpectedTask(title: "Riunione", dueDate: nextWeekdayDate(monday, skipToday: true), dueTime: nil, priority: nil)],
+    ]),
+    CorpusCase(id: 65, focus: .language, input: "pagare la fattura tra 3 giorni", expected: [
+        [ExpectedTask(title: "Pagare la fattura", dueDate: offsetDate(3), dueTime: nil, priority: nil)],
+    ]),
+    CorpusCase(id: 66, focus: .priority, input: "urgente: riparare il sito prima della demo", expected: [
+        [ExpectedTask(title: "Riparare il sito prima della demo", dueDate: nil, dueTime: nil, priority: .high)],
+    ]),
+    CorpusCase(id: 67, focus: .splitting, input: "comprare pane e chiamare mamma", expected: [
+        [
+            ExpectedTask(title: "Comprare pane", dueDate: nil, dueTime: nil, priority: nil),
+            ExpectedTask(title: "Chiamare mamma", dueDate: nil, dueTime: nil, priority: nil),
+        ],
+    ]),
+
+    // Portuguese
+    CorpusCase(id: 68, focus: .language, input: "ligar para o max amanhã", expected: [
+        [ExpectedTask(title: "Ligar para o max", dueDate: offsetDate(1), dueTime: nil, priority: nil)],
+    ]),
+    CorpusCase(id: 69, focus: .language, input: "reunião próxima segunda", expected: [
+        [ExpectedTask(title: "Reunião", dueDate: nextWeekdayDate(monday, skipToday: true), dueTime: nil, priority: nil)],
+    ]),
+    CorpusCase(id: 70, focus: .language, input: "pagar a fatura em 3 dias", expected: [
+        [ExpectedTask(title: "Pagar a fatura", dueDate: offsetDate(3), dueTime: nil, priority: nil)],
+    ]),
+    CorpusCase(id: 71, focus: .priority, input: "urgente: consertar o site antes da demo", expected: [
+        [ExpectedTask(title: "Consertar o site antes da demo", dueDate: nil, dueTime: nil, priority: .high)],
+    ]),
+    CorpusCase(id: 72, focus: .splitting, input: "comprar pão e ligar para a mãe", expected: [
+        [
+            ExpectedTask(title: "Comprar pão", dueDate: nil, dueTime: nil, priority: nil),
+            ExpectedTask(title: "Ligar para a mãe", dueDate: nil, dueTime: nil, priority: nil),
+        ],
+    ]),
+
+    // Dutch
+    CorpusCase(id: 73, focus: .language, input: "bellen met max morgen", expected: [
+        [ExpectedTask(title: "Bellen met max", dueDate: offsetDate(1), dueTime: nil, priority: nil)],
+    ]),
+    CorpusCase(id: 74, focus: .language, input: "vergadering volgende maandag", expected: [
+        [ExpectedTask(title: "Vergadering", dueDate: nextWeekdayDate(monday, skipToday: true), dueTime: nil, priority: nil)],
+    ]),
+    CorpusCase(id: 75, focus: .language, input: "factuur betalen over 3 dagen", expected: [
+        [ExpectedTask(title: "Factuur betalen", dueDate: offsetDate(3), dueTime: nil, priority: nil)],
+    ]),
+    CorpusCase(id: 76, focus: .priority, input: "urgent: site repareren voor de demo", expected: [
+        [ExpectedTask(title: "Site repareren voor de demo", dueDate: nil, dueTime: nil, priority: .high)],
+    ]),
+    CorpusCase(id: 77, focus: .splitting, input: "brood kopen en moeder bellen", expected: [
+        [
+            ExpectedTask(title: "Brood kopen", dueDate: nil, dueTime: nil, priority: nil),
+            ExpectedTask(title: "Moeder bellen", dueDate: nil, dueTime: nil, priority: nil),
+        ],
+    ]),
+
+    // Polish
+    CorpusCase(id: 78, focus: .language, input: "zadzwonić do maxa jutro", expected: [
+        [ExpectedTask(title: "Zadzwonić do maxa", dueDate: offsetDate(1), dueTime: nil, priority: nil)],
+    ]),
+    CorpusCase(id: 79, focus: .language, input: "spotkanie w przyszły poniedziałek", expected: [
+        [ExpectedTask(title: "Spotkanie", dueDate: nextWeekdayDate(monday, skipToday: true), dueTime: nil, priority: nil)],
+    ]),
+    CorpusCase(id: 80, focus: .language, input: "zapłacić fakturę za 3 dni", expected: [
+        [ExpectedTask(title: "Zapłacić fakturę", dueDate: offsetDate(3), dueTime: nil, priority: nil)],
+    ]),
+    CorpusCase(id: 81, focus: .priority, input: "pilne: naprawić stronę przed demo", expected: [
+        [ExpectedTask(title: "Naprawić stronę przed demo", dueDate: nil, dueTime: nil, priority: .high)],
+    ]),
+    CorpusCase(id: 82, focus: .splitting, input: "kupić chleb i zadzwonić do mamy", expected: [
+        [
+            ExpectedTask(title: "Kupić chleb", dueDate: nil, dueTime: nil, priority: nil),
+            ExpectedTask(title: "Zadzwonić do mamy", dueDate: nil, dueTime: nil, priority: nil),
+        ],
+    ]),
 ]
