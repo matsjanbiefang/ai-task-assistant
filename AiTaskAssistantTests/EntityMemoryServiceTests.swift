@@ -86,4 +86,47 @@ struct EntityMemoryServiceTests {
         #expect(all[0].source == EntitySource.corrected.rawValue)
         #expect(all[0].categoryHint == "health")
     }
+
+    // Milestone 10 (STT-2): sanity checks on the hand-rolled edit-distance implementation itself,
+    // separate from fuzzyMatch's entity-lookup wrapping around it.
+    @Test
+    func levenshteinIdenticalStringsIsZero() {
+        #expect(EntityMemoryService.levenshteinDistance("greenwood", "greenwood") == 0)
+    }
+
+    @Test
+    func levenshteinClassicKittenSitting() {
+        #expect(EntityMemoryService.levenshteinDistance("kitten", "sitting") == 3)
+    }
+
+    @Test
+    func levenshteinEmptyStringEdgeCases() {
+        #expect(EntityMemoryService.levenshteinDistance("", "abc") == 3)
+        #expect(EntityMemoryService.levenshteinDistance("abc", "") == 3)
+        #expect(EntityMemoryService.levenshteinDistance("", "") == 0)
+    }
+
+    @Test
+    func fuzzyMatchFindsNearMissWithinDistance2() {
+        let context = makeContext()
+        EntityMemoryService.recordMention("Greenwood Avenue", type: .place, categoryHint: nil, context: context)
+        let match = EntityMemoryService.fuzzyMatch("Grinwood Avenue", context: context)
+        #expect(match?.entity == "Greenwood Avenue")
+    }
+
+    @Test
+    func fuzzyMatchIgnoresCandidatesFartherThanMaxDistance() {
+        let context = makeContext()
+        EntityMemoryService.recordMention("Greenwood Avenue", type: .place, categoryHint: nil, context: context)
+        let match = EntityMemoryService.fuzzyMatch("Something Else Entirely", context: context)
+        #expect(match == nil)
+    }
+
+    @Test
+    func fuzzyMatchReturnsNilForAnExactMatch() {
+        let context = makeContext()
+        EntityMemoryService.recordMention("Greenwood Avenue", type: .place, categoryHint: nil, context: context)
+        let match = EntityMemoryService.fuzzyMatch("Greenwood Avenue", context: context)
+        #expect(match == nil)
+    }
 }

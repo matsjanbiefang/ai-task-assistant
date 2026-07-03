@@ -53,6 +53,16 @@ struct TitleReductionRule: Sendable {
     let template: String
 }
 
+// Milestone 10 (STT-1, swipe-final-architecture.md §0.5): a recurring transcription-error fix —
+// regex `pattern` matched and rewritten to `replacement` (NSRegularExpression replacement
+// template syntax, "$1" etc. supported) before segmentation. Packs ship this empty today (no real
+// dictation-error data exists yet to seed it with — same "grows from corpus failures only" rule
+// the rest of the pack system follows).
+struct STTPattern: Sendable {
+    let pattern: String
+    let replacement: String
+}
+
 // MARK: - Per-language rule table (prd-update-02.md §2)
 //
 // Each supported language gets its own hand-written table of the phrases NSDataDetector doesn't
@@ -108,6 +118,7 @@ struct LanguageRules: Sendable {
     let sequentialWords: [String]                  // words meaning "then" — marks a split as dependent/sequential rather than two independent tasks
     let imperativeVerbs: Set<String>               // first-word check for splitting
     let verbSuffixes: [String]                     // last-word suffix check for splitting (e.g. German/Dutch "-en", Polish "-ć")
+    let sttPatterns: [STTPattern]                  // Milestone 10 (STT-1): recurring transcription-error fixes, applied before segmentation
 
     // Explicit initializer, not the synthesized memberwise one: Swift's synthesized init does not
     // keep defaulted parameters (vagueTimeOfDayWords/laterOffsetWords) at their declared position
@@ -143,7 +154,8 @@ struct LanguageRules: Sendable {
         conjunctionWords: [String],
         sequentialWords: [String],
         imperativeVerbs: Set<String>,
-        verbSuffixes: [String]
+        verbSuffixes: [String],
+        sttPatterns: [STTPattern] = []
     ) {
         self.code = code
         self.weekdayNames = weekdayNames
@@ -174,6 +186,7 @@ struct LanguageRules: Sendable {
         self.sequentialWords = sequentialWords
         self.imperativeVerbs = imperativeVerbs
         self.verbSuffixes = verbSuffixes
+        self.sttPatterns = sttPatterns
     }
 }
 
@@ -209,7 +222,8 @@ struct RuleBasedExtractionService: Sendable {
         // ("take my recipes with me", "an meine überweisung") attach to the nearest preceding
         // action instead of polluting its title or becoming a bogus second task.
         let lineRules = candidateRules(for: line, primaryLanguageCode: primaryLanguageCode)
-        let clauses = segmentClauses(line, rulesList: lineRules)
+        let normalizedLine = applySTTPatterns(line, rulesList: lineRules)
+        let clauses = segmentClauses(normalizedLine, rulesList: lineRules)
 
         struct PendingAction {
             var text: String
@@ -298,6 +312,25 @@ struct RuleBasedExtractionService: Sendable {
         let detected = detectLanguage(line).rawValue
         if detected != primaryLanguageCode { codes.append(detected) }
         return codes.compactMap { Self.languageTables[$0] }
+    }
+
+    // Milestone 10 (STT-1, swipe-final-architecture.md §0.5): applies each candidate language's
+    // sttPatterns — regex find/replace for recurring transcription errors — before segmentation.
+    // internal (not private) so it's directly unit-testable with a synthetic LanguageRules, same
+    // reasoning as detectLanguage's visibility change in Milestone 7. Packs ship empty sttPatterns
+    // today (no real dictation-error data exists to seed them with) — this wires the APPLICATION
+    // mechanism now so a future pack update needs zero engine changes, matching the pack system's
+    // own governing principle. A no-op today (every shipped pack's sttPatterns is []).
+    func applySTTPatterns(_ text: String, rulesList: [LanguageRules]) -> String {
+        var result = text
+        for rules in rulesList {
+            for sttPattern in rules.sttPatterns {
+                guard let regex = try? NSRegularExpression(pattern: sttPattern.pattern) else { continue }
+                let range = NSRange(result.startIndex..., in: result)
+                result = regex.stringByReplacingMatches(in: result, options: [], range: range, withTemplate: sttPattern.replacement)
+            }
+        }
+        return result
     }
 
     // MARK: - Per-sub-line task assembly

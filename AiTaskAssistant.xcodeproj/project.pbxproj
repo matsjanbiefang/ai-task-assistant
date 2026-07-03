@@ -38,6 +38,7 @@
 		A1000032 /* EntityMemoryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000036 /* EntityMemoryService.swift */; };
 		A1000033 /* EntityMemoryServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000037 /* EntityMemoryServiceTests.swift */; };
 		A1000034 /* FoundationModelsFallback.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000038 /* FoundationModelsFallback.swift */; };
+		A1000035 /* STTNormalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000039 /* STTNormalizationTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -75,6 +76,7 @@
 		A2000036 /* EntityMemoryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntityMemoryService.swift; sourceTree = "<group>"; };
 		A2000037 /* EntityMemoryServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntityMemoryServiceTests.swift; sourceTree = "<group>"; };
 		A2000038 /* FoundationModelsFallback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoundationModelsFallback.swift; sourceTree = "<group>"; };
+		A2000039 /* STTNormalizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STTNormalizationTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -126,6 +128,7 @@
 				A2000021 /* ExtractionCorpus.swift */,
 				A2000022 /* ExtractionAccuracyTests.swift */,
 				A2000037 /* EntityMemoryServiceTests.swift */,
+				A2000039 /* STTNormalizationTests.swift */,
 			);
 			path = AiTaskAssistantTests;
 			sourceTree = "<group>";
@@ -335,6 +338,7 @@
 				A1000017 /* ExtractionCorpus.swift in Sources */,
 				A1000018 /* ExtractionAccuracyTests.swift in Sources */,
 				A1000033 /* EntityMemoryServiceTests.swift in Sources */,
+				A1000035 /* STTNormalizationTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
