@@ -1112,3 +1112,86 @@ correctly wherever completed-task history matters), only the free-form note row 
 attempted fix — like round 4's, backed by an actual crash log rather than a guess, but the fact
 that round 4's fix didn't fully solve it (different closure, same bug class) means it's worth
 treating build 9 as still needing real confirmation before calling this closed.
+
+## Milestone 0.6 — Language Pack JSON Migration
+
+`swipe-final-architecture.md` landed as the canonical extraction architecture doc, superseding the
+extraction sections of the PRD updates. Its governing principle: language knowledge lives in
+bundled data packs, never engine code — adding language 9+ should be a pure data + corpus task.
+This milestone is Phase 1 of that doc: moving the 8 already-shipped, already-validated languages
+(en/de/fr/es/it/pt/nl/pl) from compiled `LanguageRules` Swift struct literals to bundled JSON packs.
+
+Two review rounds against the doc itself (before any code was touched) caught real conflicts: the
+doc's original draft silently dropped the onboarding primary-language-first resolution
+(`prd-update-02.md` §3) in favor of raw per-line `NLLanguageRecognizer` detection, and its rollout
+section implied resetting scope to "Launch: DE + EN" despite Batch 1's 8 languages already being
+validated and in TestFlight. The user revised the doc to fix both before implementation started —
+worth noting because it's a useful pattern: challenge an architecture doc against the actual
+shipped state before treating it as ground truth, especially when it's written in a "starting
+fresh" voice that doesn't reflect how far a project has actually progressed.
+
+**Scope, deliberately narrowed:** literal data migration only — zero engine logic changes. The
+doc's `splitClassifiers`/`detailClauseMarkers` pack-section naming is used to organize the JSON,
+but the segmentation/clause-classification engine code is untouched. All 8 languages carried
+forward as-is, not rebuilt. Confidence-gate calibration, entity memory, FM fallback, and STT
+normalization (the doc's other phases) are explicitly out of scope here — logged as Milestones 7-10
+in TODO.md instead of attempted in the same pass.
+
+**Migration mechanics:** a new `LanguagePackDTO` (`LanguagePack.swift`) mirrors the JSON shape
+exactly and converts to the existing, completely unmodified `LanguageRules` type via
+`toLanguagePack.toLanguageRules()` — so none of `RuleBasedExtractionService`'s ~40 consumption sites
+needed to change. The trickiest part was regex transcription: Swift's raw strings (`#"..."#`) have
+no JSON equivalent, so every pattern's backslashes had to be manually doubled for JSON string
+escaping, and the shared `punctSep` fragment (previously interpolated into every language's
+priority-prefix patterns via `\#(punctSep)`) had to be pre-expanded into each pack so packs stay
+self-contained. Validated with PowerShell's `ConvertFrom-Json` (JSON syntax) and `[regex]::new()`
+against every extracted pattern (compiles, though .NET regex isn't a perfect stand-in for
+`NSRegularExpression`/ICU — real validation had to wait for CI).
+
+**Xcode project wiring without Xcode:** this repo has no local Mac (all CI runs on GitHub Actions'
+macOS runners — see prior milestones), so the 8 new JSON resource files and the new `LanguagePack.swift`
+source file had to be added to `project.pbxproj` by hand: new `PBXFileReference`/`PBXBuildFile`
+entries, a new `LanguagePacks` group, and entries in both the `Sources` and `Resources` build
+phases, following the file's existing hand-assigned ID numbering convention. Confirmed
+`Bundle.main` resolves correctly for both real app runtime and the hosted `AiTaskAssistantTests`
+target by checking `TEST_HOST`/`BUNDLE_LOADER` — the test target runs hosted inside the app bundle,
+so no separate resource wiring was needed for tests.
+
+**CI verification found a pre-existing bug, not a migration regression.** First run: 105/113 (92%),
+8 line failures across 6 corpus cases (6, 17, 22, 28, 30, 32) — every single one involving the word
+"friday" resolving to next Friday (2026-07-10) instead of today (2026-07-03, which is itself a
+Friday). Traced this before touching anything: English's `weekdayPhraseRules` is `[]` in both the
+pre-migration Swift literal and the new JSON pack — byte-identical, so this data path is provably
+untouched by the migration. English has no bare-weekday rule at all (unlike every other language),
+so it falls through entirely to `NSDataDetector` via `englishDateMatch`, which apparently resolves
+a same-day weekday match to *next* week rather than today. Confirmed via two independent CI runs
+with zero code changes in between: byte-for-byte identical failure output both times — deterministic
+per calendar day, not flaky. German's equivalent bare-weekday case (23, "freitag") passes correctly
+via the engine's own `nextWeekdayDate` function, which is the clearest evidence this is an
+English-specific, NSDataDetector-specific gap rather than anything migration-related.
+
+Considered fixing it inline (add English a bare-weekday `weekdayPhraseRules` entry mirroring
+German/French's pattern) since it looked like a trivial one-line data addition. It isn't: English
+has no `timePattern` either, so today `englishDateMatch`'s `NSDataDetector` call is the *only* thing
+extracting 12-hour am/pm times for English (e.g. case 28, "pick up kids at 3pm friday") — `buildTask`
+skips `englishDateMatch` entirely once an earlier stage (`customDateMatch`) already found a date, and
+neither `customTimeMatch` (needs a `timePattern`, English's is `nil`) nor `timeOfDayWords` (only
+covers "noon"/"midday") could pick up the slack. Adding the bare-weekday rule would have traded
+case 28's currently-correct `dueTime` for a new failure. Properly fixing this needs an engine-level
+am/pm time parser, which is out of scope for a literal data migration — logged as **LP-4** in
+TODO.md instead of rushed into this change.
+
+**Decision: merged despite red CI.** The failure is proven pre-existing, proven unrelated to the
+migration, and deterministic on the exact calendar day the tests happened to run (today is a
+Friday) rather than anything intermittent. Blocking the actual migration on a pre-existing gap that
+happens to surface today — and would keep surfacing every Friday until LP-4 is done regardless of
+this PR — didn't seem like the right tradeoff. Documented as **LP-3**/**LP-4** in TODO.md rather than
+silently ignored.
+
+**Process note on tooling:** `gh` CLI auth via the device-code browser flow got stuck mid-flow
+(the "Authorize github" confirmation page wouldn't advance, tab became unresponsive to
+screenshots) — worked around by having the user open the PR manually and, since the repo is
+public, polling PR/CI state via the unauthenticated GitHub REST API instead of `gh`. Reading
+Actions log output for a specific failed step still needed the browser (job logs and artifact
+downloads both 403 without auth on the API), which did work once navigated directly and the
+step's log group was expanded.

@@ -63,6 +63,38 @@ per user instead of relying solely on per-line auto-detection.
       Romanian, Bulgarian, Croatian, Slovenian, Estonian, Latvian, Lithuanian, Maltese, Irish) as
       Milestone 6 follow-up work, not silently shipped unverified
 
+## Milestone 0.6 — Language Pack JSON Migration (swipe-final-architecture.md, Phase 1)
+
+- [x] **LP-1** Move the 8 shipped languages' `LanguageRules` (en/de/fr/es/it/pt/nl/pl) from compiled
+      Swift struct literals to bundled JSON packs (`AiTaskAssistant/LanguagePacks/*.json`), per
+      `swipe-final-architecture.md` §3's governing principle: language knowledge lives in data
+      packs, never engine code. Pure data migration — engine logic (segmentation, clause
+      classification, date/time extraction, etc.) and `LanguageRules` itself are unchanged. New
+      `LanguagePack.swift` adds the DTO/loader layer. All 8 languages carried forward as-is.
+- [x] **LP-2** Wire the 8 JSON packs into the Xcode project as bundled app-target resources
+      (`project.pbxproj`), verified they load via `Bundle.main` in both the real app and the
+      test-hosted `AiTaskAssistantTests` target.
+- [x] **LP-3** CI regression run surfaced a **pre-existing, migration-unrelated** bug: English has
+      no bare-weekday `weekdayPhraseRules` (unlike every other language) and no `timePattern` for
+      am/pm times, so it relies entirely on `NSDataDetector` for both. On a day where "today" is
+      literally the named weekday, `NSDataDetector` resolves a bare weekday name to *next* week's
+      occurrence instead of today (6 corpus cases: 6, 17, 22, 28, 30, 32 — all "friday"-related).
+      Confirmed unrelated to the migration: English's `weekdayPhraseRules` is `[]` in both the old
+      and new code (byte-identical), German's equivalent bare-weekday case (23, "freitag") passes
+      via the engine's own `nextWeekdayDate` logic, and the failure was 100% reproducible across two
+      independent CI runs (not flaky). A minimal fix (add English's own bare-weekday rule, mirroring
+      German/French's pattern) was considered but rejected here — it would make `customDateMatch`
+      claim the date first and skip `englishDateMatch`, which is also the *only* thing extracting
+      12-hour am/pm times for English today (case 28's "3pm" has nowhere else to be parsed, since
+      `timePattern` is `nil` and `timeOfDayWords` only covers "noon"/"midday"). Properly fixing this
+      needs an engine-level am/pm time parser, not just a data change — tracked as **LP-4** below,
+      not fixed as part of this data-only migration.
+- [ ] **LP-4** (follow-up) Add an English bare-weekday date rule *and* an am/pm-capable
+      `timePattern` (with engine support to interpret am/pm — the `timePattern` contract today is
+      hour + optional minute only, no am/pm group) so English's date/time resolution stops depending
+      entirely on `NSDataDetector`. This is an engine change, not a pack-only addition — plan and
+      test it as its own unit of work, not bundled into another change.
+
 ## Milestone 1 — Notes Screen + Structured View Redesign
 
 - [x] **U1-1** Redesign `NoteView` (Slide 1) as a free-form, multi-line notes editor (Apple Notes
@@ -126,3 +158,47 @@ from `IMPLEMENTATION-LOG.md`'s "Next actions" before considering Milestone 1 tru
 - [ ] **L-8** Native-speaker or professional-translation review pass per language before it's
       surfaced as fully supported in the language picker — confidence from general knowledge alone
       is markedly lower for Finnish, Hungarian, Estonian, Latvian, Lithuanian, Maltese, Irish
+
+## Milestone 7 — Confidence Gate Calibration (swipe-final-architecture.md, Phase 2)
+
+- [ ] **CG-1** Extend the corpus scorer to report per-field accuracy (title / date / time /
+      priority / category / segmentation) separately, not just per-line pass/fail and per-`focus`
+      bucket (today's `ExtractionAccuracyTests` only has the latter — see IMPLEMENTATION-LOG.md).
+      Segmentation split precision/recall tracked on its own, per §6.
+- [ ] **CG-2** Build threshold-calibration tooling: run the corpus rules-only, sweep the gate
+      threshold, pick the lowest value where precision on above-threshold tasks ≥ 98%, per language.
+      Re-run as part of the regression suite on every engine or pack change.
+- [ ] **CG-3** Centralize the confidence gate — today's `dateConfidence < 0.7` check is duplicated
+      as a literal in both `NoteView.swift` and `AssistantView.swift`, and only covers date
+      confidence (no title/priority/segmentation confidence exists yet).
+
+## Milestone 8 — Entity Memory (swipe-final-architecture.md, Phase 3)
+
+- [ ] **EM-1** Add an `EntityMemory` SwiftData `@Model` (entity, type, categoryHint, frequency,
+      confidence, lastSeen, source), following the existing `TaskItem`/`NoteLine` conventions (plain
+      `var` properties, UUID-reference-not-`@Relationship` style, added to the app's
+      `.modelContainer` list in `AiTaskAssistantApp.swift`).
+- [ ] **EM-2** Wire stage 3 (resolution + confidence boost/lower) and stage 6 (user correction →
+      confidence 1.0 overwrite) per §7. No hardcoded global entity lists — per-user learned entities
+      only.
+- [ ] **EM-3** Optional Contacts seeding at onboarding (permission-gated) to mitigate cold start.
+
+## Milestone 9 — Foundation Models Fallback (swipe-final-architecture.md, Phase 4)
+
+- [ ] **FM-1** Runtime availability double-gate: device (`SystemLanguageModel.default.availability`)
+      AND language support, behind `@available(iOS 26, *)` — deployment target is iOS 17.0, so this
+      must be purely additive, never a hard dependency.
+- [ ] **FM-2** `SystemLanguageModel(useCase: .contentTagging)`, `@Generable` task schema, guided
+      generation only (no free-text parsing). Refines only the low-confidence candidate passed to
+      it, with rules output as context — never overrides a high-confidence rules result.
+- [ ] **FM-3** Lint rule / review checklist item enforcing on-device-only — the framework's
+      cloud-provider options are never used (would silently break the no-API constraint).
+
+## Milestone 10 — STT Normalization (swipe-final-architecture.md, Phase 0.5)
+
+- [ ] **STT-1** Per-language `sttPatterns` (recurring transcription error fixes) — packs already
+      reserve this key (empty `[]` for all 8 languages today). Depends on Milestone 2 (voice input
+      into the notes surface) actually existing first; STT error patterns can't be authored against
+      dictation that isn't wired up yet.
+- [ ] **STT-2** Fuzzy match against entity memory (Levenshtein ≤ 2 on proper nouns, never silent
+      below match confidence) — depends on Milestone 8 (entity memory) being in place.
