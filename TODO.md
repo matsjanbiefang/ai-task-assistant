@@ -169,14 +169,24 @@ from `IMPLEMENTATION-LOG.md`'s "Next actions" before considering Milestone 1 tru
       `category` is deliberately excluded from `ExpectedTask` (see its own policy comment) — adding
       it means deciding whether to backfill all 101 cases or make it optional/incremental; not
       attempted in this pass.
-- [ ] **CG-2** Build threshold-calibration tooling: run the corpus rules-only, sweep the gate
-      threshold, pick the lowest value where precision on above-threshold tasks ≥ 98%, per language.
-      Re-run as part of the regression suite on every engine or pack change. Needs per-*task* (not
-      per-line) granularity and a way to know each corpus case's language — neither exists yet.
+- [x] **CG-2** (diagnostic only) Threshold-calibration tooling in `ExtractionAccuracyTests.swift`:
+      per-task `ConfidenceSample`s (language via `RuleBasedExtractionService.detectLanguage`, now
+      internal instead of private) + `calibrateThreshold()` (lowest t where precision on
+      confidence-≥-t tasks is ≥ 98%, swept only at distinct observed confidence values) + a new
+      `confidenceGateCalibration()` test printing overall and per-language results, flagging any
+      bucket under 20 samples as statistically unreliable rather than reporting it as trustworthy.
+      Runs every CI build, per the doc's "re-run on every engine or pack change." **Not wired into
+      the app**: see CG-2b.
+- [ ] **CG-2b** Replace `RuleBasedExtractionService.lowConfidenceThreshold`'s single fixed 0.7 with
+      the calibrated per-language values CG-2 now computes. Blocked less by engineering effort than
+      by data: today's corpus has ~5 cases per Batch 1 language, nowhere near enough for a
+      trustworthy 98%-precision estimate — revisit once Milestone 6 grows those corpora. Needs a
+      storage decision too (new Swift dict? a section in each `LanguagePack` JSON?) plus updating
+      `isLowConfidence(_:)` and its two call sites to be language-aware.
 - [x] **CG-3** Centralize the confidence gate — `RuleBasedExtractionService.isLowConfidence(_:)` /
       `.lowConfidenceThreshold` replaces the `dateConfidence < 0.7` literal previously duplicated in
       both `NoteView.swift` and `AssistantView.swift`. Still date-confidence-only (no
-      title/priority/segmentation confidence exists yet) — CG-2's calibrated threshold is the next
+      title/priority/segmentation confidence exists yet) — CG-2b's calibrated threshold is the next
       thing to plug in here.
 
 ## Milestone 8 — Entity Memory (swipe-final-architecture.md, Phase 3)

@@ -1243,6 +1243,47 @@ produce multiple tasks) and a way to know which language each corpus case is act
 (today only `CorpusFocus` exists, which is an input-pattern axis, not a language-code axis) — both
 missing pieces that deserve their own design pass rather than being rushed alongside this one.
 
+## Milestone 7 (finish) — CG-2 Threshold-Calibration Tooling
+
+Third pass on `swipe-final-architecture.md`. §6's calibration spec: *"run the corpus rules-only,
+sweep the gate threshold, pick the lowest value where precision on above-threshold tasks ≥ 98%...
+per language."* CG-1's `LineFieldScore` (previous pass) already carried `dueDateMatches: [Bool]`
+per paired task, so most of the plumbing existed — what was actually missing was per-task
+*confidence* alongside correctness, and a way to bucket samples by language.
+
+**Language bucketing reuses the engine's own classifier, not a new one.** `RuleBasedExtractionService`
+already has `detectLanguage(_:)` (an `NLLanguageRecognizer` wrapper `candidateRules(for:primaryLanguageCode:)`
+calls internally) — widened from `private` to internal (visibility-only, zero logic change) so the
+test target can call the *exact* function the runtime pipeline uses, rather than a second
+`NLLanguageRecognizer` call site that could silently drift from it over time.
+
+**The sweep only tests distinct observed confidence values**, not a fixed grid (e.g. 0.0, 0.05,
+0.1, ...) — precision as a function of threshold is a step function that only changes at points
+where a sample's confidence sits, so testing anywhere else can't find a different answer, only
+waste cycles or (worse, with a coarse enough grid) miss the true lowest-threshold answer between
+two grid points.
+
+**Reported real numbers surfaced the sample-size problem immediately, as expected.** With ~5 corpus
+cases per Batch 1 language, most per-language buckets don't reach the `minimumCalibrationSampleSize`
+(20) cutoff — `describeCalibration()` flags those explicitly rather than printing a confident-looking
+number that's actually noise from 5 samples. This was flagged as a real constraint during planning
+(not just discovered by surprise), and shaped the biggest scope decision here.
+
+**Deliberately not wired into the app (CG-2b, deferred).** Two independent reasons, either one
+would have been enough alone: (1) engineering scope — swapping the single fixed
+`lowConfidenceThreshold` for calibrated per-language values needs a storage decision (new dict?
+part of each `LanguagePack` JSON?) and updates to `isLowConfidence(_:)` plus both its call sites to
+be language-aware, a distinct chunk of work from building the calibration algorithm itself; (2) the
+values genuinely aren't trustworthy yet for most languages given current sample sizes — wiring a
+noisy estimate into the app's actual gating behavior would be worse than keeping the existing fixed
+0.7, not better. CG-2b is logged in TODO.md to revisit once Milestone 6 grows each language's
+corpus past the reliability threshold.
+
+This closes out Milestone 7's three items (CG-1 partial, CG-2 diagnostic, CG-3) as a matched set —
+all three intentionally stopped short of a "final" state (category scoring, CG-2b's runtime wiring)
+in favor of shipping the low-risk, high-confidence part of each and logging the rest with a clear
+reason, rather than either rushing the harder half or blocking the easy half on it.
+
 ## Milestone 8 — Entity Memory (storage + recording, not yet wired into extraction)
 
 Fourth pass on `swipe-final-architecture.md`, continuing the doc's own pipeline order (entity

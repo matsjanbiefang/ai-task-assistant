@@ -534,7 +534,9 @@ struct RuleBasedExtractionService: Sendable {
 
     // MARK: - Language detection (§2)
 
-    private func detectLanguage(_ text: String) -> NLLanguage {
+    // Milestone 7 (CG-2): visible (not private) so ExtractionAccuracyTests' calibration tooling can
+    // bucket corpus samples by the same language classification the runtime pipeline actually uses.
+    func detectLanguage(_ text: String) -> NLLanguage {
         let recognizer = NLLanguageRecognizer()
         recognizer.processString(text)
         return recognizer.dominantLanguage ?? .english
