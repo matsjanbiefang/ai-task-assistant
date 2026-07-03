@@ -1393,3 +1393,53 @@ tooling — so it's a documented convention directly in `FoundationModelsFallbac
 comment plus this log entry, not a CI check. Worth revisiting if the codebase ever grows enough
 files touching `FoundationModels` that a grep-based CI check (e.g. failing on any string matching a
 cloud-provider configuration API) becomes worth the maintenance.
+
+## Milestone 2 — Voice Input into Notes Surface
+
+Not a from-scratch build — `SpeechRecognizer.swift` already existed, having survived three real
+rounds of TestFlight crash fixes (all `dispatch_assert_queue_fail`/actor-isolation mismatches
+between Swift 6's runtime checks and framework callback threads; see the mic-crash log entries
+earlier in this file). The last fix (build 9) was confirmed via an actual crash log but never
+re-verified in a subsequent successful TestFlight run — worth remembering that "fixed" here means
+"the specific crash that produced that log stopped," not "confirmed permanently closed."
+
+Two concrete gaps closed, both already identified in this file's own prior verification notes
+(Milestone 1's "dictation targeting the compose row — has not been visually/manually verified"):
+
+1. **No line-splitting on speech pauses.** `transcript = result.bestTranscription.formattedString`
+   was one flat, ever-growing string — `SFSpeechRecognizer` never emits `"\n"` for a spoken pause
+   the way typing does. Fixed by computing gaps between consecutive `SFTranscriptionSegment`
+   timestamps (`.timestamp`/`.duration`, confirmed against Apple's docs) and inserting a line break
+   past a threshold. Deliberately written as a **pure function** (`formatWithLineBreaks`, no
+   `self`, no audio/Speech-framework state) so it's structurally incapable of touching any of the
+   `nonisolated` isolation-fix code the three crash rounds depend on — the only line changed in the
+   recognition callback itself is the one assigning `self.transcript`.
+2. **No auto-commit when recording stopped.** Dictated text just sat in the compose field.
+   `commitCompose()` (the existing typing-flow commit) assumes a single line — it only trims
+   leading/trailing whitespace, so a `"\n"`-containing string would pass straight into extraction
+   as one malformed line rather than splitting. Added `commitDictatedText()` as a **separate**
+   function (not a shared/modified `commitCompose()`) that splits on `"\n"`, commits each segment
+   as its own `NoteLine` in order, and is triggered off `speech.state`'s recording→not-recording
+   transition rather than the mic button specifically — state can also go idle internally (e.g.
+   `result.isFinal` auto-stopping), which a button-tap-only trigger would have missed.
+
+**One existing behavior needed a guard, not a rewrite.** The typing flow already had
+`.onChange(of: composeText)` treating any `"\n"` as "commit and clear" (correct for a single
+Return press) — left unguarded, it would have fired on dictation's own streaming multi-newline
+updates too, stripping *all* embedded newlines and concatenating segments together with no
+separator before committing the mangled result as one line. Gated it to `!isRecording` so dictation
+and typing now go through genuinely separate commit paths that don't interfere with each other.
+
+**Explicitly did not touch** the Siri trigger path (`AddTaskIntent` → `ContentView`'s
+`activateDictation` binding) — already flagged elsewhere in this file as dead code (`ContentView`
+lost its `.onContinueUserActivity` handler somewhere across the MVP→rules-engine rewrite, per an
+existing "known pre-existing gap" note). That's TODO's Milestone 4 (`U4-1`), a different milestone;
+touching it here would have expanded scope into a second unrelated, currently-broken code path.
+
+**Verification ceiling, same shape as Milestone 9's:** no CI runner has a microphone, and `Speech`
+framework recognition can't be driven by synthetic/injected audio in this project's setup. The
+`build` job confirms compilation and zero regression to the (extraction-logic-untouched) corpus
+suite — it cannot confirm dictation actually works. The 1.2s pause threshold is a first guess, not
+calibrated against any real dictation data, because none exists yet. U2-2 (validate + tune) stays
+open pending an actual device pass — stated plainly rather than claiming this milestone is "done"
+in a sense it demonstrably isn't yet.

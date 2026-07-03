@@ -91,7 +91,7 @@ final class SpeechRecognizer {
             guard let self else { return }
             if let result {
                 Task { @MainActor in
-                    self.transcript = result.bestTranscription.formattedString
+                    self.transcript = Self.formatWithLineBreaks(result.bestTranscription)
                     if result.isFinal {
                         self.stopRecording()
                     }
@@ -127,6 +127,31 @@ final class SpeechRecognizer {
             req.append(buffer)
         }
         return true
+    }
+
+    // U2-1 (Milestone 2, prd-update-01.md §3): SFSpeechRecognizer doesn't emit "\n" for spoken
+    // pauses the way typing does, so a multi-task dictation ("buy milk... call the dentist
+    // tomorrow") would otherwise land as one long compose-field string with no way to become two
+    // NoteLines. Approximates a sentence/task boundary from the gap between consecutive word
+    // segments — an initial guess (1.2s), not calibrated against real dictation data (can't be,
+    // from this environment); U2-2 flags tuning this as expected future work once real usage
+    // exists. Pure function — no `self`, no audio/Speech-framework state — so it can't touch any
+    // of the isolation paths the three mic-crash fixes above depend on.
+    private static let pauseLineBreakThreshold: TimeInterval = 1.2
+
+    private static func formatWithLineBreaks(_ transcription: SFTranscription) -> String {
+        var result = ""
+        var previousEnd: TimeInterval?
+        for segment in transcription.segments {
+            if let previousEnd, segment.timestamp - previousEnd >= pauseLineBreakThreshold {
+                result += "\n"
+            } else if !result.isEmpty {
+                result += " "
+            }
+            result += segment.substring
+            previousEnd = segment.timestamp + segment.duration
+        }
+        return result
     }
 
     func stopRecording() {

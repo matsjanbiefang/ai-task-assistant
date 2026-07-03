@@ -115,6 +115,14 @@ struct NoteView: View {
         .onChange(of: speech.transcript) { _, new in
             if isRecording { composeText = new }
         }
+        // U2-1: commit on the recording→not-recording transition, not just the mic-button tap —
+        // `speech.state` can also go idle internally (e.g. `result.isFinal` auto-stopping), which
+        // a button-tap-only trigger would miss.
+        .onChange(of: speech.state) { old, new in
+            if old == .recording && new != .recording {
+                Task { await commitDictatedText() }
+            }
+        }
         .sheet(isPresented: $showTasks) {
             AssistantView()
                 .presentationDetents([.medium, .large])
@@ -210,7 +218,12 @@ struct NoteView: View {
                 Task { await commitCompose() }
             }
             .onChange(of: composeText) { _, newValue in
-                guard newValue.contains("\n") else { return }
+                // U2-1: while dictating, composeText can legitimately carry multiple embedded
+                // "\n"s (one per detected speech pause) as the transcript streams in — those are
+                // committed as separate lines all at once when recording stops, not one at a
+                // time here. This handler is only for the single-Return-press typing case, where
+                // "\n" means "commit and clear," not "insert a newline character."
+                guard !isRecording, newValue.contains("\n") else { return }
                 composeText = newValue.replacingOccurrences(of: "\n", with: "")
                 Task { await commitCompose() }
             }
@@ -415,6 +428,30 @@ struct NoteView: View {
         modelContext.insert(newLine)
         composeText = ""
         await reparse(newLine)
+    }
+
+    // U2-1: dictation's composeText can carry multiple "\n"-separated segments (one per detected
+    // speech pause) by the time recording stops — commitCompose() assumes a single line and would
+    // pass an embedded "\n" straight into extraction, which isn't designed to split on interior
+    // newlines the way extract(from:) (plural) does. Each segment becomes its own NoteLine here,
+    // in order, mirroring what typing-and-returning multiple lines already produces.
+    private func commitDictatedText() async {
+        let segments = composeText
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        guard !segments.isEmpty else {
+            composeText = ""
+            return
+        }
+        var nextOrder = (lines.map(\.order).max() ?? -1) + 1
+        for segment in segments {
+            let newLine = NoteLine(text: segment, order: nextOrder)
+            nextOrder += 1
+            modelContext.insert(newLine)
+            await reparse(newLine)
+        }
+        composeText = ""
     }
 
     // U1-5: editing a committed line replaces its old tasks rather than duplicating them.
