@@ -34,5 +34,5 @@ struct ContentView: View {
 
 #Preview {
     ContentView(deepLinkDestination: .constant(nil))
-        .modelContainer(for: [TaskItem.self, NoteLine.self], inMemory: true)
+        .modelContainer(for: [TaskItem.self, NoteLine.self, EntityMemory.self], inMemory: true)
 }

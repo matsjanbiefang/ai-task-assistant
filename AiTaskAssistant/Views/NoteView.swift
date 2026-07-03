@@ -458,6 +458,9 @@ struct NoteView: View {
                 timeOfDay: task.timeOfDay
             )
             modelContext.insert(item)
+            if let place = item.place {
+                EntityMemoryService.recordMention(place, type: .place, categoryHint: item.category, context: modelContext)
+            }
             if let date = item.dueDate, date > .now {
                 await NotificationService.shared.schedule(taskID: item.id.uuidString, title: item.title, at: date)
             }
@@ -522,5 +525,5 @@ struct NoteView: View {
 
 #Preview {
     NoteView(activateDictation: .constant(false), showTasks: .constant(false))
-        .modelContainer(for: [TaskItem.self, NoteLine.self], inMemory: true)
+        .modelContainer(for: [TaskItem.self, NoteLine.self, EntityMemory.self], inMemory: true)
 }
