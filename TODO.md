@@ -125,10 +125,18 @@ from `IMPLEMENTATION-LOG.md`'s "Next actions" before considering Milestone 1 tru
 
 ## Milestone 2 — Voice Input into Notes Surface
 
-- [ ] **U2-1** Adapt mic/dictation to insert transcribed text into the notes surface (multi-line) rather
-      than a single text field, respecting per-line parsing as dictation produces line breaks
+- [x] **U2-1** `SpeechRecognizer.formatWithLineBreaks` inserts a line break at speech-pause gaps
+      (≥1.2s between `SFTranscriptionSegment`s) instead of one flat transcript string;
+      `NoteView.commitDictatedText()` splits the accumulated compose text on those breaks and
+      commits each as its own `NoteLine` when recording stops (button tap or auto-finalize via
+      `speech.state` leaving `.recording`), reusing the same per-line `reparse` path typed-and-
+      returned lines already go through. The existing typing-Return-commits-immediately handler is
+      now gated to `!isRecording` so it doesn't fire on dictation's own multi-newline updates.
+      **Verification gap, stated explicitly**: no microphone in any CI environment — this compiles
+      and passes the corpus suite (zero extraction-logic changes) but is unverified end-to-end;
+      needs a real-device pass. The 1.2s pause threshold is an initial, uncalibrated guess.
 - [ ] **U2-2** Validate multi-task splitting and bilingual parsing with dictated input; tune rules if
-      needed
+      needed — blocked on the same real-device pass as U2-1's verification gap.
 
 ## Milestone 3 — Reminders (carry over, verify against new flow)
 
