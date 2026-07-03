@@ -51,4 +51,41 @@ enum EntityMemoryService {
         let all = (try? context.fetch(FetchDescriptor<EntityMemory>())) ?? []
         return all.first { $0.entity.caseInsensitiveCompare(entity) == .orderedSame }
     }
+
+    // Milestone 10 (STT-2, swipe-final-architecture.md §7/§0.5): fuzzy-matches a candidate string
+    // against known entities within edit distance 2 — catches STT near-misses on proper nouns
+    // ("Grinwood Avenue" -> "Greenwood Avenue") without silently correcting anything further off
+    // than that. NOT wired into the extraction pipeline (needs a ModelContext, which
+    // RuleBasedExtractionService.extractLine doesn't take today — a bigger threading change than
+    // this pass, same reasoning as CG-2b/EM-2b/FM-2b). Whoever wires this in later still needs to
+    // honor "never silent below match confidence" (§7) — a fuzzy correction shouldn't inherit the
+    // confidence of an exact match.
+    static func fuzzyMatch(_ candidate: String, maxDistance: Int = 2, context: ModelContext) -> EntityMemory? {
+        let trimmed = candidate.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+        let all = (try? context.fetch(FetchDescriptor<EntityMemory>())) ?? []
+        guard !all.contains(where: { $0.entity.caseInsensitiveCompare(trimmed) == .orderedSame }) else { return nil }
+        return all
+            .map { ($0, levenshteinDistance(trimmed.lowercased(), $0.entity.lowercased())) }
+            .filter { $0.1 > 0 && $0.1 <= maxDistance }
+            .min { $0.1 < $1.1 }?.0
+    }
+
+    // Not private — hand-rolled edit-distance code is worth testing directly, not just through
+    // fuzzyMatch's wrapper.
+    static func levenshteinDistance(_ a: String, _ b: String) -> Int {
+        let a = Array(a), b = Array(b)
+        if a.isEmpty { return b.count }
+        if b.isEmpty { return a.count }
+        var previousRow = Array(0...b.count)
+        for i in 1...a.count {
+            var currentRow = [i]
+            for j in 1...b.count {
+                let cost = a[i - 1] == b[j - 1] ? 0 : 1
+                currentRow.append(min(previousRow[j] + 1, currentRow[j - 1] + 1, previousRow[j - 1] + cost))
+            }
+            previousRow = currentRow
+        }
+        return previousRow[b.count]
+    }
 }

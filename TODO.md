@@ -244,9 +244,24 @@ from `IMPLEMENTATION-LOG.md`'s "Next actions" before considering Milestone 1 tru
 
 ## Milestone 10 — STT Normalization (swipe-final-architecture.md, Phase 0.5)
 
-- [ ] **STT-1** Per-language `sttPatterns` (recurring transcription error fixes) — packs already
-      reserve this key (empty `[]` for all 8 languages today). Depends on Milestone 2 (voice input
-      into the notes surface) actually existing first; STT error patterns can't be authored against
-      dictation that isn't wired up yet.
-- [ ] **STT-2** Fuzzy match against entity memory (Levenshtein ≤ 2 on proper nouns, never silent
-      below match confidence) — depends on Milestone 8 (entity memory) being in place.
+- [x] **STT-1** `STTPattern` (regex `pattern`/`replacement`) added to `LanguageRules`, wired through
+      `LanguagePackDTO.toLanguageRules()` (was previously decoded and silently discarded).
+      `RuleBasedExtractionService.applySTTPatterns` applies each candidate language's patterns
+      before segmentation, wired into `extractLine` as stage 0.5. All 8 packs still ship
+      `sttPatterns: []` — no real dictation-error data exists yet to seed them with (same
+      "grows from corpus failures only" rule the rest of the pack system follows) — so this is a
+      provable no-op today: the corpus suite's overall accuracy must stay exactly 105/113 (92%),
+      verified against CI before merge. Adding a pattern to a pack needs zero further engine
+      changes.
+- [x] **STT-2** `EntityMemoryService.levenshteinDistance`/`fuzzyMatch` — Levenshtein ≤ 2 lookup
+      against stored entities, unit-tested standalone (near-miss matches, distance-3 doesn't, an
+      exact match returns `nil`). **Not wired into the extraction pipeline** — needs a
+      `ModelContext`, which `extractLine` doesn't take today; giving it one is a real
+      signature/threading change to the pipeline every corpus test depends on. See **STT-2b**
+      below.
+- [ ] **STT-2b** (new follow-up) Wire `EntityMemoryService.fuzzyMatch` into the live extraction
+      pipeline — needs a `ModelContext`-threading design pass through `extractLine` (or a
+      pre/post-processing hook at a call site that already has one, e.g. `NoteView.reparse`), plus
+      a decision on which extracted substrings are worth fuzzy-checking as proper-noun candidates
+      in the first place. Same shape as CG-2b/EM-2b/FM-2b: deferred because it's an architecture
+      decision, not because the underlying capability isn't ready.

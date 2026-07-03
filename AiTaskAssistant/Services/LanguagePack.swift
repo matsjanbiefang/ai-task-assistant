@@ -23,7 +23,7 @@ struct LanguagePackDTO: Decodable {
     let stopwords: StopwordsDTO
     let fillerPhrases: [String]
     let titleReductionRules: [TitleReductionRuleDTO]
-    let sttPatterns: [String]
+    let sttPatterns: [STTPatternDTO]
     let ambiguityRules: AmbiguityRulesDTO
 }
 
@@ -83,6 +83,13 @@ struct TitleReductionRuleDTO: Decodable {
     let template: String
 }
 
+// Milestone 10 (STT-1). Currently decoded from an empty array in every shipped pack — see
+// STTPattern's doc comment in RuleBasedExtractionService.swift for why.
+struct STTPatternDTO: Decodable {
+    let pattern: String
+    let replacement: String
+}
+
 // Reserved for Phase 2 (confidence-gate calibration) — decoded now so packs are forward-compatible,
 // unused until that phase formalizes ambiguity handling beyond the inline confidence values already
 // on WeekdayPhraseRule etc.
@@ -129,7 +136,10 @@ extension LanguagePackDTO {
             conjunctionWords: conjunctions,
             sequentialWords: splitClassifiers,
             imperativeVerbs: Set(actionVerbs.imperativeVerbs),
-            verbSuffixes: actionVerbs.verbSuffixes
+            verbSuffixes: actionVerbs.verbSuffixes,
+            sttPatterns: sttPatterns.map {
+                STTPattern(pattern: $0.pattern, replacement: $0.replacement)
+            }
         )
     }
 }

@@ -1443,3 +1443,57 @@ suite — it cannot confirm dictation actually works. The 1.2s pause threshold i
 calibrated against any real dictation data, because none exists yet. U2-2 (validate + tune) stays
 open pending an actual device pass — stated plainly rather than claiming this milestone is "done"
 in a sense it demonstrably isn't yet.
+
+## Milestone 10 — STT Normalization
+
+Both parts of `swipe-final-architecture.md`'s stage 0.5 were blocked on prior milestones —
+Milestone 2 (voice input, just merged) for STT-1, Milestone 8 (entity memory, already merged) for
+STT-2. Before touching anything, verified `sttPatterns: [String]` was already being decoded by
+`LanguagePackDTO` but never actually reaching `LanguageRules` — `toLanguageRules()` simply never
+mapped it. Dead data, decoded and discarded, in every pack since the JSON migration.
+
+**STT-1** (`STTPattern` struct, mirroring `TitleReductionRule`'s existing `pattern`/`template`
+shape) is now wired all the way through: JSON pack → `STTPatternDTO` → `LanguageRules.sttPatterns`
+→ `RuleBasedExtractionService.applySTTPatterns`, called in `extractLine` between resolving
+`lineRules` and segmenting, so every downstream clause/title/place computation already sees
+normalized text with zero further changes needed. Made `applySTTPatterns` `internal` rather than
+`private` specifically so a synthetic `LanguageRules` in a test can exercise it directly — same
+reasoning as `detectLanguage`'s visibility change back in Milestone 7 (CG-2).
+
+All 8 packs still ship `sttPatterns: []` — there's no real dictation transcription-error data to
+seed them with (matches the pack system's own rule from day one: every entry traceable to a real
+missed case, not authored speculatively). That makes today's wiring a **provable no-op**: the
+corpus suite's 105/113 baseline has to come back completely unchanged for this to be correct, which
+is exactly what makes it safe to merge without a real device — unlike Milestone 2's dictation
+change, this one has a hard, CI-checkable correctness property even though the *content* (actual
+patterns) can't be authored yet. Once real transcription-error examples exist, adding them is a
+pure JSON pack edit — no engine change required, matching how every other part of the pack system
+already works.
+
+**STT-2** (Levenshtein distance + `EntityMemoryService.fuzzyMatch`) is a different story. The
+distance function is standard DP, unit-tested directly (identical strings, the classic
+"kitten"/"sitting" = 3 case, empty-string edges) rather than only through `fuzzyMatch`'s wrapper,
+since hand-rolled edit-distance code is exactly the kind of thing that's subtly wrong in an
+off-by-one way tests catch immediately. `fuzzyMatch` itself is tested against an in-memory
+`ModelContainer`: a near-miss within distance 2 resolves to the stored entity, anything farther
+doesn't, and an exact match returns `nil` (nothing to correct).
+
+**Deliberately not wired into `extractLine`.** Doing so needs a `ModelContext` — `extractLine` is
+a fully synchronous, dependency-free pipeline today, and every corpus test calls it that way. Adding
+a `ModelContext` parameter is a real signature/threading change to the one function every other
+milestone's verification has depended on staying stable, not something to bolt on as a side effect
+of an unrelated feature. There's also a genuine open design question independent of the threading
+change: fuzzy-matching needs *candidate* substrings to check against known entities, and today
+proper-noun identification happens **inside** extraction (place matching, title capitalization) —
+nothing upstream of `extractLine` currently knows what counts as a "proper noun candidate" worth
+fuzzy-checking. Logged as **STT-2b**: needs both the `ModelContext`-threading design (through
+`extractLine` itself, or a pre/post-processing hook at a call site that already has a context, like
+`NoteView.reparse`) and a decision on where candidate substrings come from. Same shape as
+CG-2b/EM-2b/FM-2b — deferred because it's a real design decision, not because the capability isn't
+ready.
+
+**Verification ceiling, consistent with every other stage-0.5-adjacent milestone this session:**
+STT-1's mechanism is verified by CI (must be a true no-op against the corpus suite) plus direct
+unit tests; STT-2's Levenshtein/fuzzy-match correctness is verified by unit tests. Neither can be
+verified against *real* STT output — there's still no dictation-error corpus, and building one
+needs the real-device pass Milestone 2's U2-2 is already waiting on.
