@@ -42,6 +42,19 @@ struct TaskEditView: View {
                         ), displayedComponents: .date)
                     }
 
+                    // Real-device feedback (2026-07-03): "business trip to Hamburg from Thursday
+                    // to Saturday" — same toggle/picker shape as "Has due date" above.
+                    Toggle("Has end date", isOn: Binding(
+                        get: { task.dueEndDate != nil },
+                        set: { if !$0 { task.dueEndDate = nil } else { task.dueEndDate = task.dueDate ?? .now } }
+                    ))
+                    if task.dueEndDate != nil {
+                        DatePicker("End date", selection: Binding(
+                            get: { task.dueEndDate ?? .now },
+                            set: { task.dueEndDate = $0 }
+                        ), displayedComponents: .date)
+                    }
+
                     Toggle("Has due time", isOn: Binding(
                         get: { task.dueTime != nil },
                         set: { if !$0 { task.dueTime = nil } else { task.dueTime = .now } }

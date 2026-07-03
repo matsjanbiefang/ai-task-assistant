@@ -261,6 +261,53 @@ struct ExtractionAccuracyTests {
         #expect(tasks[1].title == "Inform martin about it")
     }
 
+    // Real-device feedback (2026-07-03): "go shopping and then to dinner" also failed to split —
+    // "to dinner" has no imperative verb, so it silently merged into the first task's title
+    // instead of becoming its own step. The explicit "and then" connector is now treated as
+    // sufficient on its own (see extractLine's .sequential branch) — verb or not.
+    @Test
+    func verblessSequentialClauseBecomesOwnTask() {
+        let service = RuleBasedExtractionService.shared
+        let tasks = service.extractLine("go shopping and then to dinner", referenceDate: corpusToday)
+        guard tasks.count == 2 else {
+            Issue.record("expected the line to split into 2 tasks, got \(tasks.count): \(tasks)")
+            return
+        }
+        #expect(tasks[0].groupID != nil)
+        #expect(tasks[0].groupID == tasks[1].groupID)
+        #expect(tasks[1].title == "To dinner")
+    }
+
+    // Real-device feedback (2026-07-03): "business trip to Hamburg from Thursday to Saturday"
+    // produced no date range at all. Computes the expected start/end independently (not by
+    // calling the implementation under test) using the same Calendar weekday arithmetic, relative
+    // to corpusToday rather than a hardcoded date — avoiding a repeat of the Friday-bug class of
+    // day-dependent flakiness.
+    @Test
+    func dateRangeAcrossWeekdaysProducesStartAndEndDate() {
+        let service = RuleBasedExtractionService.shared
+        let tasks = service.extractLine("business trip to hamburg from thursday to saturday", referenceDate: corpusToday)
+        guard let task = tasks.first else {
+            Issue.record("expected at least one task")
+            return
+        }
+        let calendar = Calendar.current
+        func nearest(_ weekday: Int) -> Date {
+            let todayWeekday = calendar.component(.weekday, from: corpusToday)
+            let delta = (weekday - todayWeekday + 7) % 7
+            return calendar.date(byAdding: .day, value: delta, to: corpusToday)!
+        }
+        let expectedStart = nearest(5) // Thursday
+        var expectedEnd = nearest(7)   // Saturday
+        if expectedEnd < expectedStart { expectedEnd = calendar.date(byAdding: .day, value: 7, to: expectedEnd)! }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.timeZone = .current
+        #expect(task.dueDate == formatter.string(from: expectedStart))
+        #expect(task.dueEndDate == formatter.string(from: expectedEnd))
+        #expect(task.title == "Business trip to hamburg")
+    }
+
     @Test
     func plainConjunctionDoesNotLinkSplitTasks() {
         let service = RuleBasedExtractionService.shared

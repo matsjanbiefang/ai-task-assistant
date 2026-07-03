@@ -37,6 +37,12 @@ struct DateRulesDTO: Decodable {
     let inWeeksPattern: String?
     let weekdayPhraseRules: [WeekdayPhraseRuleDTO]
     let nextWeekPattern: String?
+    // Real-device feedback (2026-07-03): weekday-name date range connector words ("from"/"to").
+    // Missing from a pack's JSON decodes to nil automatically (Optional properties use
+    // decodeIfPresent) — only en.json sets these today, matching the STT-1 precedent of
+    // populating a language only once verified, not translating speculatively.
+    let rangeFromWord: String?
+    let rangeToWord: String?
 }
 
 struct WeekdayPhraseRuleDTO: Decodable {
@@ -116,6 +122,8 @@ extension LanguagePackDTO {
                 WeekdayPhraseRule(pattern: $0.pattern, skipToday: $0.skipToday, confidence: $0.confidence)
             },
             nextWeekPattern: dateRules.nextWeekPattern,
+            rangeFromWord: dateRules.rangeFromWord,
+            rangeToWord: dateRules.rangeToWord,
             timePattern: timeWords.timePattern,
             timeOfDayWords: timeWords.timeOfDayWords,
             vagueTimeOfDayWords: timeWords.vagueTimeOfDayWords,
