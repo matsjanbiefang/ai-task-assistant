@@ -213,14 +213,26 @@ from `IMPLEMENTATION-LOG.md`'s "Next actions" before considering Milestone 1 tru
 
 ## Milestone 9 — Foundation Models Fallback (swipe-final-architecture.md, Phase 4)
 
-- [ ] **FM-1** Runtime availability double-gate: device (`SystemLanguageModel.default.availability`)
-      AND language support, behind `@available(iOS 26, *)` — deployment target is iOS 17.0, so this
-      must be purely additive, never a hard dependency.
-- [ ] **FM-2** `SystemLanguageModel(useCase: .contentTagging)`, `@Generable` task schema, guided
-      generation only (no free-text parsing). Refines only the low-confidence candidate passed to
-      it, with rules output as context — never overrides a high-confidence rules result.
-- [ ] **FM-3** Lint rule / review checklist item enforcing on-device-only — the framework's
-      cloud-provider options are never used (would silently break the no-API constraint).
+- [x] **FM-1** Runtime availability double-gate — `FoundationModelsFallback.isAvailable(forLanguageCode:)`
+      checks device (`SystemLanguageModel.default.availability == .available`) AND language support
+      (`SystemLanguageModel.default.supportsLocale(_:)`), behind `#if canImport(FoundationModels)` +
+      `@available(iOS 26, *)`. Callable unconditionally from anywhere (returns `false` outside that
+      guard) — deployment target stays iOS 17.0, this is purely additive, never a hard dependency.
+- [x] **FM-2** (scaffolding only) `SystemLanguageModel(useCase: .contentTagging)`, `@Generable`
+      `RefinedFields` schema (title / dueDate / `@Guide(.anyOf(...))`-constrained priority), guided
+      generation only via `LanguageModelSession.respond(to:generating:)` — no free-text parsing.
+      **Not wired into `RuleBasedExtractionService.extractLine`** — that function is fully
+      synchronous today; threading an async FM call into it is a real pipeline change, and its
+      actual behavior can't be verified in CI regardless (no Apple Intelligence hardware exists on
+      any CI runner, ever — this is a permanent ceiling, not a "current tooling" gap).
+- [ ] **FM-2b** Wire `FoundationModelsFallback.refine(...)` into `extractLine`'s stage-4 confidence
+      gate (call only when `RuleBasedExtractionService.isLowConfidence` is true; the caller decides
+      whether to call refine, not `refine` itself). Needs its own design pass for the sync→async
+      transition, and real-device testing once available (simulators can't run Apple Intelligence).
+- [x] **FM-3** On-device-only enforced by convention (this project has no lint tooling): every
+      reference goes through `SystemLanguageModel.default`, documented directly in
+      `FoundationModelsFallback.swift` as a review-checklist item — never construct a session
+      against a remote/cloud configuration.
 
 ## Milestone 10 — STT Normalization (swipe-final-architecture.md, Phase 0.5)
 

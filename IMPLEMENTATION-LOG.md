@@ -1335,3 +1335,61 @@ same trajectory. Corrected by deleting and recreating the cron job without the a
 instruction. Take-away: implement/push/PR-open can be fully autonomous per user instruction, but
 merging to `main` keeps a mandatory human checkpoint regardless of what the user asks — a
 platform-level guarantee, not a per-conversation preference.
+
+## Milestone 9 — Foundation Models Fallback (scaffolding, not wired into extraction)
+
+Fifth pass on `swipe-final-architecture.md`, continuing the doc's pipeline order (FM refinement is
+stage 4's low-confidence branch, right after entity memory). This one broke the pattern every prior
+milestone shared: all of them had a real, automatic verification loop (the 101-case corpus via CI).
+This one structurally can't — `SystemLanguageModel` requires Apple Intelligence hardware to actually
+respond to a prompt, and no CI runner (GitHub-hosted or otherwise) has that. The best available
+signal is "does it compile," not "does it work."
+
+**Researched rather than assumed the Xcode/SDK question first**, since it directly determines
+whether any verification is possible at all. Findings, cited against `actions/runner-images` and
+Apple's own docs:
+- The `macos-15` GitHub-hosted runner (already used by `ios.yml`) has Xcode 26.0.1 through 26.3
+  installed alongside the 16.x line — `xcode-select` just defaults to 16.4. No runner-image change
+  needed, only which Xcode a job picks.
+- `FoundationModels` requires the Xcode 26 SDK to compile against at all (not just run) — the
+  framework's symbols don't exist in the Xcode 16.x SDK, so `#if canImport(FoundationModels)`
+  genuinely evaluates `false` there and `true` under Xcode 26.x. This is why the existing `build`
+  job (Xcode 16.4) gives zero signal on whether the new code is *correct* — it just silently
+  excludes it.
+- API surface (`SystemLanguageModel.default.availability`'s `.available`/`.unavailable(reason:)`
+  cases, `.supportsLocale(_:)`, `SystemLanguageModel(useCase:)`, `@Generable`/`@Guide` syntax,
+  `LanguageModelSession.respond(to:generating:).content`) was researched against Apple's current
+  documentation and third-party WWDC-25-era writeups rather than reconstructed from training-data
+  memory, specifically because this code can't be locally compiled to catch a typo'd case name —
+  getting it right the first time mattered more than usual.
+
+**Design: build the capability, don't wire it in — same precedent as CG-2b/EM-2b, for two
+independent reasons this time instead of one.** (1) Scope: `RuleBasedExtractionService.extractLine`
+is fully synchronous; threading an async FM call into it is a real pipeline change, not a drive-by
+addition. (2) Verification: even after wiring it in, there's no way to confirm the wiring actually
+*works* in this environment — no CI runner can exercise real Apple Intelligence output, so "wire it
+in now" would mean shipping unverified control-flow changes to the one pipeline that's been
+100%-corpus-tested through every other milestone this session. Not worth the risk for a change that
+can't be checked. `FoundationModelsFallback.isAvailable(forLanguageCode:)` and `.refine(...)` are
+fully built and callable, just not called from anywhere yet (**FM-2b**, deferred).
+
+**`isAvailable` is designed to be callable unconditionally, guard-free, from any call site** — it
+returns `false` outside `#if canImport(FoundationModels)`/`@available(iOS 26, *)` internally, so the
+*rest* of the app (once FM-2b wires it in) never needs its own compile-time guard just to ask "is FM
+usable right now." Only the actual `@Generable` schema and `refine(...)` function — the parts that
+reference FoundationModels types directly — live behind the guard.
+
+**New, additive, non-blocking CI job** (`foundation-models-compile-check` in `ios.yml`) rather than
+changing the existing `build` job's Xcode selection — selects Xcode 26.3, builds the same scheme,
+`continue-on-error: true`. Deliberately additive: the existing job (Xcode 16.4, full corpus test
+suite) is the one thing every other milestone this session depended on for verification, and
+swapping its toolchain version is a real risk to everything else in the app, not just this feature —
+different Swift compiler, different simulator behavior, different SDK quirks. A second, non-blocking
+job gets the one useful signal (does the new file compile under a real iOS 26 SDK) without touching
+the thing that's actually been keeping this whole session honest.
+
+**FM-3** (on-device-only enforcement) has no automated form in this project — there's no lint
+tooling — so it's a documented convention directly in `FoundationModelsFallback.swift`'s header
+comment plus this log entry, not a CI check. Worth revisiting if the codebase ever grows enough
+files touching `FoundationModels` that a grep-based CI check (e.g. failing on any string matching a
+cloud-provider configuration API) becomes worth the maintenance.
