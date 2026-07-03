@@ -1536,3 +1536,59 @@ already unwired) are untouched — this only stops the two places that ever writ
 row. Functionally this costs nothing today; it just pauses accumulating data for a feature that
 doesn't consume it yet. Real fix (root-causing the SwiftData crash, or re-enabling once Apple
 ships a fix) is a follow-up, not resolved here.
+
+## Real-device feedback fixes (2026-07-03) — RDF-1, RDF-2
+
+Continued real-device testing after the crash fix surfaced two more gaps, plus two more (a typo
+and a pre-existing regex bug) explicitly deferred at the user's direction.
+
+**RDF-1 — verbless sequential clauses.** "Go shopping and then to dinner" didn't split. Traced to
+`extractLine`'s `.sequential` branch requiring `containsVerb(clause.text, ...)` before treating a
+clause as its own task — "to dinner" has no imperative lead word or verb suffix, so it silently
+merged back into the first task's title, even though the branch's own comment already claimed
+"the user stated sequencing; that wins over detail rules." Dropped the verb requirement entirely.
+Before touching it, an Explore agent confirmed zero cases in `ExtractionCorpus.swift` exercise the
+`.sequential` branch at all (only plain "and"/"und" conjunctions appear in scored cases) — so this
+was a genuinely zero-corpus-risk change. The one thing that had to keep passing,
+`sequentialConnectorLinksSplitTasks` (`ExtractionAccuracyTests.swift`), still does — it's the
+verb-present case and was never touched. New test `verblessSequentialClauseBecomesOwnTask` covers
+the verbless case directly, since nothing exercised it before. Known limitation: the resulting
+title is literal ("To dinner"), not verb-inferred ("Go to dinner") — inferring implied verbs is a
+much fuzzier problem than this fix takes on.
+
+**RDF-2 — weekday-name date ranges.** "Business trip to Hamburg from Thursday to Saturday"
+produced no range — confirmed `ExtractedTask`/`TaskItem` had no range concept at all, just a single
+`dueDate`. Added `dueEndDate` to both, a new `dateRangeMatch` matcher (tried first in `buildTask`,
+before the single-date matchers, so it can't be preempted by one of them accidentally grabbing
+just the range's start or end weekday), and two new per-language fields `rangeFromWord`/
+`rangeToWord`. Scoped deliberately narrow: weekday-name ranges only (matches the reported case),
+English only for actual values — every other language pack leaves the new fields absent, which
+`Decodable` resolves to `nil` automatically for `Optional` properties, so nothing else needed to
+change in the other 7 JSON files. Same "populate only where verified" precedent as this session's
+STT-1 work.
+
+Discovered mid-implementation, not anticipated in the plan: `en.json`'s `weekdayNames` was `{}` —
+completely empty. Every other language populates it (weekday name → `Calendar.weekday` int,
+1=Sun...7=Sat); English never did, because it has no `weekdayPhraseRules` either and has always
+relied entirely on `NSDataDetector` for weekday resolution (`englishDateMatch`) — which is the
+root cause of the long-standing, separately-tracked Friday-bug (same-day-of-week resolves to next
+week). `dateRangeMatch` needs `weekdayNames` populated to build its weekday-alternation regex and
+resolve names to `Calendar.weekday` values, so English's `weekdayNames` got filled in with the
+standard mapping. Confirmed safe: `weekdayNames` has exactly one other consumer
+(`weekdayPhraseRules` resolution), and English's `weekdayPhraseRules` array is still empty, so
+populating `weekdayNames` alone changes nothing about how bare "friday"-style phrases resolve —
+verified against CI (same 105/113 baseline, same six known Friday-bug cases, unchanged).
+
+UI: `TaskEditView` gets a "Has end date" toggle + `DatePicker`, mirroring "Has due date" exactly.
+`AssistantView`'s task row renders `"Jul 9 – Jul 11"` when `dueEndDate` is set, `"Jul 9"` alone
+otherwise. `datePatternStrings(for:)` (the inline-highlight pattern list) got the same range
+pattern added, per that function's own maintenance comment, so a detected range highlights in the
+notes editor the same way every other date phrase already does.
+
+**Explicitly deferred at the user's direction, not fixed here:**
+- The "Meeting at Park Aveneue" report — a typo ("Aveneue" isn't "Avenue"), not a parsing bug; the
+  address-shape matcher correctly requires an exact street-type suffix.
+- The `placeKeywordMatch` bug (`\b` as a Swift string literal escape — backspace character, not a
+  regex word-boundary — so the whole keyword-based place lookup has silently never matched
+  anything). Confirmed real and safely fixable (`\b` → `\\b`, one line), but the user asked to skip
+  it for this round. Still open.

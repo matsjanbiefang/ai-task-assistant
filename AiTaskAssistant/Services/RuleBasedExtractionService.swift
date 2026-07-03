@@ -15,6 +15,10 @@ struct ExtractedTask: Sendable {
     var title: String
     var dueDate: String?      // ISO 8601 YYYY-MM-DD, local calendar day
     var dueTime: String?      // HH:MM, 24h
+    // Real-device feedback (2026-07-03): "business trip to Hamburg from Thursday to Saturday" —
+    // set only by dateRangeMatch, alongside dueDate as the range's start. nil for every task with
+    // just a single date, which is still the overwhelming majority.
+    var dueEndDate: String? = nil
     var priority: TaskPriority?
     var category: TaskCategory?
     var dateConfidence: Double
@@ -89,6 +93,12 @@ struct LanguageRules: Sendable {
     let inWeeksPattern: String?
     let weekdayPhraseRules: [WeekdayPhraseRule]    // ordered — more specific patterns (e.g. "next <weekday>") before bare weekday
     let nextWeekPattern: String?
+    // Real-device feedback (2026-07-03): "business trip to Hamburg from Thursday to Saturday" —
+    // the two connector words for a weekday-name date range ("from"/"to"). Both nil today except
+    // English, matching the STT-1 precedent: only populate a language once it's been verified,
+    // not translated speculatively.
+    let rangeFromWord: String?
+    let rangeToWord: String?
     let timePattern: String?                      // capture group 1 = hour, group 2 = optional minute
     let timeOfDayWords: [String: String]           // UNAMBIGUOUS time-of-day word -> fixed "HH:mm" (e.g. German "mittags" -> "12:00")
     // Feedback round 3: "morning"/"evening" etc. span hours, not a single instant — guessing a
@@ -136,6 +146,8 @@ struct LanguageRules: Sendable {
         inWeeksPattern: String?,
         weekdayPhraseRules: [WeekdayPhraseRule],
         nextWeekPattern: String?,
+        rangeFromWord: String? = nil,
+        rangeToWord: String? = nil,
         timePattern: String?,
         timeOfDayWords: [String: String],
         vagueTimeOfDayWords: [String: String] = [:],
@@ -167,6 +179,8 @@ struct LanguageRules: Sendable {
         self.inWeeksPattern = inWeeksPattern
         self.weekdayPhraseRules = weekdayPhraseRules
         self.nextWeekPattern = nextWeekPattern
+        self.rangeFromWord = rangeFromWord
+        self.rangeToWord = rangeToWord
         self.timePattern = timePattern
         self.timeOfDayWords = timeOfDayWords
         self.vagueTimeOfDayWords = vagueTimeOfDayWords
@@ -248,13 +262,13 @@ struct RuleBasedExtractionService: Sendable {
                 continue
             }
             if clause.separator == .sequential {
-                // Explicit "and then" — the user stated sequencing; that wins over detail rules.
-                if clause.text.split(separator: " ").count >= 2, containsVerb(clause.text, rulesList: clauseRules) {
-                    actions.append(PendingAction(text: clause.text, sequential: true, details: []))
-                    sawSequential = true
-                } else {
-                    actions[actions.count - 1].text += clause.joinerText + clause.text
-                }
+                // Explicit "and then" — the user stated sequencing; that wins over detail rules,
+                // verb or not. Previously gated on containsVerb, which silently merged a verbless
+                // continuation ("...and then to dinner") back into the first task's title instead
+                // of splitting it — the explicit connector is a strong enough signal on its own
+                // (segmentClauses already guarantees clause.text is non-empty).
+                actions.append(PendingAction(text: clause.text, sequential: true, details: []))
+                sawSequential = true
                 continue
             }
             if isDetailClause(clause.text, rulesList: clauseRules) {
@@ -362,20 +376,35 @@ struct RuleBasedExtractionService: Sendable {
         }
 
         var dueDate: String?
+        var dueEndDate: String?
         var dueTime: String?
         var timeOfDay: String?
         var confidence = 1.0
         var rangesToStrip: [Range<String.Index>] = []
         var dateFound = false
 
+        // Real-device feedback (2026-07-03): "business trip to Hamburg from Thursday to
+        // Saturday" — tried first so a range wins over the single-date matchers below
+        // accidentally grabbing just its start or end weekday.
         for rules in rulesList {
-            guard let match = laterOffsetMatch(in: text, referenceDate: referenceDate, rules: rules) else { continue }
-            dueDate = isoDate(match.date)
-            dueTime = match.time
+            guard let match = dateRangeMatch(in: text, referenceDate: referenceDate, rules: rules) else { continue }
+            dueDate = isoDate(match.startDate)
+            dueEndDate = isoDate(match.endDate)
             confidence = match.confidence
             rangesToStrip.append(match.range)
             dateFound = true
             break
+        }
+        if !dateFound {
+            for rules in rulesList {
+                guard let match = laterOffsetMatch(in: text, referenceDate: referenceDate, rules: rules) else { continue }
+                dueDate = isoDate(match.date)
+                dueTime = match.time
+                confidence = match.confidence
+                rangesToStrip.append(match.range)
+                dateFound = true
+                break
+            }
         }
         if !dateFound {
             for rules in rulesList {
@@ -441,6 +470,7 @@ struct RuleBasedExtractionService: Sendable {
             title: title,
             dueDate: dueDate,
             dueTime: dueTime,
+            dueEndDate: dueEndDate,
             priority: priority,
             category: category,
             dateConfidence: dateFound ? confidence : 1.0,
@@ -761,6 +791,40 @@ struct RuleBasedExtractionService: Sendable {
         let label: String
     }
 
+    private struct DateRangeMatch {
+        let range: Range<String.Index>
+        let startDate: Date
+        let endDate: Date
+        let confidence: Double
+    }
+
+    // Real-device feedback (2026-07-03): "business trip to Hamburg from Thursday to Saturday" —
+    // scoped to weekday-name ranges only (matches the reported case), reusing weekdayNames and
+    // nextOccurrence exactly as weekdayPhraseRules resolution does below. Requires "from" directly
+    // before a weekday name, so it can't false-positive on an unrelated "to <place>" earlier in
+    // the same line (e.g. "trip to Hamburg" doesn't have "from" + a weekday before "Hamburg").
+    // rangeFromWord/rangeToWord are nil for every language except English today — same
+    // "mechanism for all, populate only where verified" precedent as Milestone 10's STT-1.
+    private func dateRangeMatch(in text: String, referenceDate: Date, rules: LanguageRules) -> DateRangeMatch? {
+        guard let fromWord = rules.rangeFromWord, let toWord = rules.rangeToWord,
+              !rules.weekdayNames.isEmpty else { return nil }
+        let weekdayAlt = rules.weekdayNames.keys.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
+        let pattern = "\\b\(NSRegularExpression.escapedPattern(for: fromWord))\\s+(\(weekdayAlt))\\s+\(NSRegularExpression.escapedPattern(for: toWord))\\s+(\(weekdayAlt))\\b"
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+              let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+              let range = Range(match.range, in: text) else { return nil }
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: referenceDate)
+        let ns = text as NSString
+        let name1 = ns.substring(with: match.range(at: 1)).lowercased()
+        let name2 = ns.substring(with: match.range(at: 2)).lowercased()
+        guard let weekday1 = rules.weekdayNames[name1], let weekday2 = rules.weekdayNames[name2] else { return nil }
+        let start = nextOccurrence(of: weekday1, from: today, calendar: calendar, skipToday: false)
+        var end = nextOccurrence(of: weekday2, from: today, calendar: calendar, skipToday: false)
+        if end < start { end = calendar.date(byAdding: .day, value: 7, to: end)! }
+        return DateRangeMatch(range: range, startDate: start, endDate: end, confidence: 0.85)
+    }
+
     // Feedback round 3: "later"/"später" resolves to a computed, specific answer (now + 6h) per
     // explicit request, rather than the round-2 behavior of just flagging "today, no time".
     private func laterOffsetMatch(in text: String, referenceDate: Date, rules: LanguageRules) -> DateMatch? {
@@ -941,6 +1005,10 @@ struct RuleBasedExtractionService: Sendable {
         if let pattern = rules.inWeeksPattern { patterns.append(pattern) }
         patterns.append(contentsOf: rules.weekdayPhraseRules.map(\.pattern))
         if let pattern = rules.nextWeekPattern { patterns.append(pattern) }
+        if let fromWord = rules.rangeFromWord, let toWord = rules.rangeToWord, !rules.weekdayNames.isEmpty {
+            let weekdayAlt = rules.weekdayNames.keys.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
+            patterns.append("\\b\(NSRegularExpression.escapedPattern(for: fromWord))\\s+(\(weekdayAlt))\\s+\(NSRegularExpression.escapedPattern(for: toWord))\\s+(\(weekdayAlt))\\b")
+        }
         if let pattern = rules.timePattern { patterns.append(pattern) }
         if let alt = wordAlternation(Array(rules.timeOfDayWords.keys)) { patterns.append("\\b(\(alt))\\b") }
         if let alt = wordAlternation(Array(rules.vagueTimeOfDayWords.keys)) { patterns.append("\\b(\(alt))\\b") }

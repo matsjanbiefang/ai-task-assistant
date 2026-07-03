@@ -72,9 +72,18 @@ struct AssistantView: View {
                 HStack(spacing: 6) {
                     if let date = task.dueDate {
                         let isLowConfidence = RuleBasedExtractionService.isLowConfidence(task.dateConfidence)
-                        Text(date.formatted(.dateTime.month(.abbreviated).day()))
-                            .font(.caption)
-                            .foregroundStyle(isLowConfidence ? .orange : .secondary)
+                        // Real-device feedback (2026-07-03): "business trip to Hamburg from
+                        // Thursday to Saturday" — dueEndDate, when present, renders as "Jul 9 –
+                        // Jul 11" instead of just the range's start.
+                        if let endDate = task.dueEndDate {
+                            Text("\(date.formatted(.dateTime.month(.abbreviated).day())) – \(endDate.formatted(.dateTime.month(.abbreviated).day()))")
+                                .font(.caption)
+                                .foregroundStyle(isLowConfidence ? .orange : .secondary)
+                        } else {
+                            Text(date.formatted(.dateTime.month(.abbreviated).day()))
+                                .font(.caption)
+                                .foregroundStyle(isLowConfidence ? .orange : .secondary)
+                        }
                         if isLowConfidence {
                             Image(systemName: "questionmark.circle")
                                 .font(.caption2)

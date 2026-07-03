@@ -1,7 +1,7 @@
 {
   "code": "en",
   "dateRules": {
-    "weekdayNames": {},
+    "weekdayNames": {"sunday": 1, "monday": 2, "tuesday": 3, "wednesday": 4, "thursday": 5, "friday": 6, "saturday": 7},
     "todayWords": [],
     "tomorrowWords": [],
     "dayAfterTomorrowWords": [],
@@ -9,7 +9,9 @@
     "inDaysPattern": "\\bin\\s+(\\d+|a|one|two|three|four|five|six|seven|eight|nine|ten)\\s+days?\\b",
     "inWeeksPattern": "\\bin\\s+(\\d+|a|one|two|three|four|five|six|seven|eight|nine|ten)\\s+weeks?\\b",
     "weekdayPhraseRules": [],
-    "nextWeekPattern": "\\bnext week\\b"
+    "nextWeekPattern": "\\bnext week\\b",
+    "rangeFromWord": "from",
+    "rangeToWord": "to"
   },
   "timeWords": {
     "timePattern": null,

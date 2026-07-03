@@ -275,3 +275,25 @@ from `IMPLEMENTATION-LOG.md`'s "Next actions" before considering Milestone 1 tru
       a decision on which extracted substrings are worth fuzzy-checking as proper-noun candidates
       in the first place. Same shape as CG-2b/EM-2b/FM-2b: deferred because it's an architecture
       decision, not because the underlying capability isn't ready.
+
+## Real-device feedback fixes (2026-07-03)
+
+- [x] **RDF-1** Verbless `.sequential` clauses ("...and then to dinner") now become their own task
+      instead of silently merging into the previous task's title — `extractLine`'s `.sequential`
+      branch (`RuleBasedExtractionService.swift`) dropped the `containsVerb` gate, since the
+      explicit "and then"/"und dann" connector is a strong enough signal on its own. Title reads
+      literally ("To dinner"), not an inferred-verb form ("Go to dinner") — a known cosmetic
+      limitation, not solved here. Zero corpus risk confirmed before the change (no existing test
+      case exercised the `.sequential` branch at all).
+- [x] **RDF-2** Weekday-name date ranges ("business trip to Hamburg from Thursday to Saturday") —
+      new `ExtractedTask.dueEndDate`/`TaskItem.dueEndDate`, a new `dateRangeMatch` matcher
+      (`RuleBasedExtractionService.swift`), and two new per-language fields
+      (`rangeFromWord`/`rangeToWord`). **English only** for now — every other pack leaves these
+      `null` (decodes to `nil` automatically), matching STT-1's "populate only where verified"
+      precedent. Discovered along the way: `en.json`'s `weekdayNames` was empty (`{}`) — English
+      has always relied entirely on `NSDataDetector` for weekday resolution (see the pre-existing
+      Friday-bug). Populated it with the standard 1=Sun...7=Sat mapping so `dateRangeMatch` has
+      something to resolve against; `weekdayPhraseRules` stays empty, so this doesn't change bare
+      "friday"-style single-date behavior or the known Friday-bug baseline at all — only the new
+      range matcher consumes it. UI: `TaskEditView` gets a "Has end date" toggle mirroring "Has due
+      date" exactly; `AssistantView`'s task row renders `"Jul 9 – Jul 11"` when a range is present.
