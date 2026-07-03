@@ -25,6 +25,15 @@
 		A1000019 /* SupportedLanguage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000023 /* SupportedLanguage.swift */; };
 		A1000020 /* OnboardingLanguageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000024 /* OnboardingLanguageView.swift */; };
 		A1000021 /* NoteLine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000025 /* NoteLine.swift */; };
+		A1000022 /* LanguagePack.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000026 /* LanguagePack.swift */; };
+		A1000023 /* en.json in Resources */ = {isa = PBXBuildFile; fileRef = A2000027 /* en.json */; };
+		A1000024 /* de.json in Resources */ = {isa = PBXBuildFile; fileRef = A2000028 /* de.json */; };
+		A1000025 /* fr.json in Resources */ = {isa = PBXBuildFile; fileRef = A2000029 /* fr.json */; };
+		A1000026 /* es.json in Resources */ = {isa = PBXBuildFile; fileRef = A2000030 /* es.json */; };
+		A1000027 /* it.json in Resources */ = {isa = PBXBuildFile; fileRef = A2000031 /* it.json */; };
+		A1000028 /* pt.json in Resources */ = {isa = PBXBuildFile; fileRef = A2000032 /* pt.json */; };
+		A1000029 /* nl.json in Resources */ = {isa = PBXBuildFile; fileRef = A2000033 /* nl.json */; };
+		A1000030 /* pl.json in Resources */ = {isa = PBXBuildFile; fileRef = A2000034 /* pl.json */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -49,6 +58,15 @@
 		A2000023 /* SupportedLanguage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupportedLanguage.swift; sourceTree = "<group>"; };
 		A2000024 /* OnboardingLanguageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingLanguageView.swift; sourceTree = "<group>"; };
 		A2000025 /* NoteLine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteLine.swift; sourceTree = "<group>"; };
+		A2000026 /* LanguagePack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanguagePack.swift; sourceTree = "<group>"; };
+		A2000027 /* en.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = en.json; sourceTree = "<group>"; };
+		A2000028 /* de.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = de.json; sourceTree = "<group>"; };
+		A2000029 /* fr.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = fr.json; sourceTree = "<group>"; };
+		A2000030 /* es.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = es.json; sourceTree = "<group>"; };
+		A2000031 /* it.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = it.json; sourceTree = "<group>"; };
+		A2000032 /* pt.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = pt.json; sourceTree = "<group>"; };
+		A2000033 /* nl.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = nl.json; sourceTree = "<group>"; };
+		A2000034 /* pl.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = pl.json; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -86,6 +104,7 @@
 				A4000007 /* Models */,
 				A4000008 /* Services */,
 				A4000009 /* Intents */,
+				A4000010 /* LanguagePacks */,
 				A2000016 /* Assets.xcassets */,
 				A2000009 /* Info.plist */,
 			);
@@ -146,6 +165,7 @@
 			isa = PBXGroup;
 			children = (
 				A2000006 /* RuleBasedExtractionService.swift */,
+				A2000026 /* LanguagePack.swift */,
 				A2000014 /* SpeechRecognizer.swift */,
 				A2000015 /* NotificationService.swift */,
 			);
@@ -158,6 +178,21 @@
 				A2000007 /* AddTaskIntent.swift */,
 			);
 			path = Intents;
+			sourceTree = "<group>";
+		};
+		A4000010 /* LanguagePacks */ = {
+			isa = PBXGroup;
+			children = (
+				A2000027 /* en.json */,
+				A2000028 /* de.json */,
+				A2000029 /* fr.json */,
+				A2000030 /* es.json */,
+				A2000031 /* it.json */,
+				A2000032 /* pt.json */,
+				A2000033 /* nl.json */,
+				A2000034 /* pl.json */,
+			);
+			path = LanguagePacks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -241,6 +276,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				A1000013 /* Assets.xcassets in Resources */,
+				A1000023 /* en.json in Resources */,
+				A1000024 /* de.json in Resources */,
+				A1000025 /* fr.json in Resources */,
+				A1000026 /* es.json in Resources */,
+				A1000027 /* it.json in Resources */,
+				A1000028 /* pt.json in Resources */,
+				A1000029 /* nl.json in Resources */,
+				A1000030 /* pl.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -265,6 +308,7 @@
 				A1000019 /* SupportedLanguage.swift in Sources */,
 				A1000020 /* OnboardingLanguageView.swift in Sources */,
 				A1000021 /* NoteLine.swift in Sources */,
+				A1000022 /* LanguagePack.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

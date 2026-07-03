@@ -1,0 +1,78 @@
+{
+  "code": "nl",
+  "dateRules": {
+    "weekdayNames": {"zondag": 1, "maandag": 2, "dinsdag": 3, "woensdag": 4, "donderdag": 5, "vrijdag": 6, "zaterdag": 7},
+    "todayWords": ["vandaag"],
+    "tomorrowWords": ["morgen"],
+    "dayAfterTomorrowWords": ["overmorgen"],
+    "numberWords": {"een": 1, "twee": 2, "drie": 3, "vier": 4, "vijf": 5, "zes": 6, "zeven": 7, "acht": 8, "negen": 9, "tien": 10},
+    "inDaysPattern": "\\bover\\s+(\\d+|een|twee|drie|vier|vijf|zes|zeven|acht|negen|tien)\\s+dagen\\b",
+    "inWeeksPattern": "\\bover\\s+(\\d+|een|twee|drie|vier|vijf|zes|zeven|acht|negen|tien)\\s+weken\\b",
+    "weekdayPhraseRules": [
+      {"pattern": "\\bvolgende\\s+(maandag|dinsdag|woensdag|donderdag|vrijdag|zaterdag|zondag)\\b", "skipToday": true, "confidence": 0.85},
+      {"pattern": "\\bdeze\\s+(maandag|dinsdag|woensdag|donderdag|vrijdag|zaterdag|zondag)\\b", "skipToday": false, "confidence": 0.85},
+      {"pattern": "\\b(maandag|dinsdag|woensdag|donderdag|vrijdag|zaterdag|zondag)\\b", "skipToday": false, "confidence": 0.6}
+    ],
+    "nextWeekPattern": "\\bvolgende\\s+week\\b"
+  },
+  "timeWords": {
+    "timePattern": "\\bom\\s+(\\d{1,2})(?:[:.](\\d{2}))?\\s*uur\\b",
+    "timeOfDayWords": {},
+    "vagueTimeOfDayWords": {"ochtend": "Ochtend", "middag": "Middag", "namiddag": "Namiddag", "avond": "Avond", "nacht": "Nacht"},
+    "laterOffsetWords": ["later"]
+  },
+  "priorityKeywords": [
+    {"pattern": "^(urgent|asap|belangrijk|hoge prioriteit)\\b[:\\-–—]?\\s*", "priority": "high"},
+    {"pattern": "^(lage prioriteit)\\b[:\\-–—]?\\s*", "priority": "low"}
+  ],
+  "conjunctions": ["en"],
+  "splitClassifiers": ["dan"],
+  "actionVerbs": {
+    "imperativeVerbs": [
+      "bellen", "kopen", "afmaken", "voorbereiden", "boeken", "betalen", "schoonmaken",
+      "antwoorden", "sturen", "plannen", "controleren", "repareren", "verlengen",
+      "annuleren", "opruimen", "terugbrengen", "ophalen", "denken", "doen", "brengen",
+      "bevestigen"
+    ],
+    "verbSuffixes": ["en"]
+  },
+  "categoryKeywords": {
+    "work": ["werk", "vergadering", "project", "klant", "kantoor"],
+    "health": ["dokter", "tandarts", "afspraak", "sportschool", "gezondheid"],
+    "shopping": ["kopen", "boodschappen", "winkel"],
+    "finance": ["betalen", "factuur", "bank", "belasting"]
+  },
+  "locationPatterns": {
+    "placeKeywords": {
+      "ziekenhuis": "Ziekenhuis", "dokter": "Dokter", "tandarts": "Tandarts",
+      "kantoor": "Kantoor", "school": "School", "universiteit": "Universiteit",
+      "supermarkt": "Supermarkt", "apotheek": "Apotheek", "bank": "Bank",
+      "sportschool": "Sportschool", "station": "Station", "vliegveld": "Vliegveld",
+      "kapper": "Kapper", "postkantoor": "Postkantoor", "bakker": "Bakker",
+      "restaurant": "Restaurant", "kerk": "Kerk", "bibliotheek": "Bibliotheek"
+    },
+    "addressPattern": null
+  },
+  "detailClauseMarkers": {
+    "detailPatterns": [
+      "^.+\\s+(?:meenemen|meebrengen)$",
+      "^denken?\\s+aan\\s+.+$",
+      "^niet\\s+vergeten\\s+.+$"
+    ],
+    "detailContinuationPrefixes": ["met", "voor"],
+    "referentialMarkers": ["met mij", "met ons"]
+  },
+  "stopwords": {
+    "words": ["alsjeblieft", "ook nog", "ook", "even"],
+    "connectorWords": ["op", "om", "de", "het"]
+  },
+  "fillerPhrases": [
+    "ik moet nog", "ik moet", "ik zou", "we moeten", "ik wil",
+    "niet vergeten", "denk eraan", "vergeet niet"
+  ],
+  "titleReductionRules": [
+    {"pattern": "^(?:ga(?:an)?\\s+)?naar\\s+(?:de\\s+|het\\s+)?(.+?)(?:\\s+gaan)?$", "template": "$1"}
+  ],
+  "sttPatterns": [],
+  "ambiguityRules": {}
+}

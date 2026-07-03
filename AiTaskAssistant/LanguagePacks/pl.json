@@ -1,0 +1,78 @@
+{
+  "code": "pl",
+  "dateRules": {
+    "weekdayNames": {"niedziela": 1, "poniedziałek": 2, "wtorek": 3, "środa": 4, "środę": 4, "czwartek": 5, "piątek": 6, "sobota": 7, "sobotę": 7},
+    "todayWords": ["dziś", "dzisiaj"],
+    "tomorrowWords": ["jutro"],
+    "dayAfterTomorrowWords": ["pojutrze"],
+    "numberWords": {"jeden": 1, "dwa": 2, "trzy": 3, "cztery": 4, "pięć": 5, "sześć": 6, "siedem": 7, "osiem": 8, "dziewięć": 9, "dziesięć": 10},
+    "inDaysPattern": "\\bza\\s+(\\d+|jeden|dwa|trzy|cztery|pięć|sześć|siedem|osiem|dziewięć|dziesięć)\\s+dni\\b",
+    "inWeeksPattern": "\\bza\\s+(\\d+|jeden|dwa|trzy|cztery|pięć|sześć|siedem|osiem|dziewięć|dziesięć)\\s+tygodni\\b",
+    "weekdayPhraseRules": [
+      {"pattern": "\\bprzyszły[m]?\\s+(poniedziałek|wtorek|środę|czwartek|piątek|sobotę|niedzielę)\\b", "skipToday": true, "confidence": 0.75},
+      {"pattern": "\\bw\\s+t[aeo]\\s+(poniedziałek|wtorek|środę|czwartek|piątek|sobotę|niedzielę)\\b", "skipToday": false, "confidence": 0.7},
+      {"pattern": "\\b(poniedziałek|wtorek|środa|czwartek|piątek|sobota|niedziela)\\b", "skipToday": false, "confidence": 0.6}
+    ],
+    "nextWeekPattern": "\\bprzyszłym\\s+tygodniu\\b"
+  },
+  "timeWords": {
+    "timePattern": "\\bo\\s+godzinie\\s+(\\d{1,2})(?::(\\d{2}))?\\b",
+    "timeOfDayWords": {"południe": "12:00"},
+    "vagueTimeOfDayWords": {"rano": "Rano", "popołudniu": "Popołudniu", "wieczorem": "Wieczorem", "noc": "Noc"},
+    "laterOffsetWords": ["później"]
+  },
+  "priorityKeywords": [
+    {"pattern": "^(pilne|asap|ważne|wysoki priorytet)\\b[:\\-–—]?\\s*", "priority": "high"},
+    {"pattern": "^(niski priorytet)\\b[:\\-–—]?\\s*", "priority": "low"}
+  ],
+  "conjunctions": ["i"],
+  "splitClassifiers": ["potem"],
+  "actionVerbs": {
+    "imperativeVerbs": [
+      "zadzwonić", "kupić", "skończyć", "przygotować", "zarezerwować", "zapłacić",
+      "posprzątać", "odpowiedzieć", "wysłać", "zaplanować", "sprawdzić", "naprawić",
+      "odnowić", "anulować", "podlać", "zwrócić", "odebrać", "pomyśleć", "zrobić",
+      "przynieść", "potwierdzić"
+    ],
+    "verbSuffixes": ["ć"]
+  },
+  "categoryKeywords": {
+    "work": ["praca", "spotkanie", "projekt", "klient", "biuro"],
+    "health": ["lekarz", "dentysta", "wizyta", "siłownia", "zdrowie"],
+    "shopping": ["kupić", "zakupy", "sklep"],
+    "finance": ["zapłacić", "faktura", "bank", "podatki"]
+  },
+  "locationPatterns": {
+    "placeKeywords": {
+      "szpital": "Szpital", "lekarz": "Lekarz", "dentysta": "Dentysta", "biuro": "Biuro",
+      "szkoła": "Szkoła", "uniwersytet": "Uniwersytet", "supermarket": "Supermarket",
+      "apteka": "Apteka", "bank": "Bank", "siłownia": "Siłownia", "dworzec": "Dworzec",
+      "lotnisko": "Lotnisko", "fryzjer": "Fryzjer", "poczta": "Poczta",
+      "piekarnia": "Piekarnia", "restauracja": "Restauracja", "kościół": "Kościół",
+      "biblioteka": "Biblioteka"
+    },
+    "addressPattern": null
+  },
+  "detailClauseMarkers": {
+    "detailPatterns": [
+      "^(?:zabrać|przynieść|wziąć)\\s+.+$",
+      "^pamiętać\\s+o\\s+.+$",
+      "^nie\\s+zapomnieć\\s+o?\\s*.+$"
+    ],
+    "detailContinuationPrefixes": ["z", "o", "dla"],
+    "referentialMarkers": ["ze mną", "z nami"]
+  },
+  "stopwords": {
+    "words": ["proszę", "też", "jeszcze"],
+    "connectorWords": ["w", "na", "o"]
+  },
+  "fillerPhrases": [
+    "muszę", "musimy", "powinienem", "powinnam", "trzeba", "chcę",
+    "nie zapomnieć", "pamiętać żeby", "pamiętaj żeby"
+  ],
+  "titleReductionRules": [
+    {"pattern": "^(?:iść|pójść|jechać|pojechać)\\s+do\\s+(.+)$", "template": "$1"}
+  ],
+  "sttPatterns": [],
+  "ambiguityRules": {}
+}
