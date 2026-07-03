@@ -148,5 +148,5 @@ struct AssistantView: View {
 
 #Preview {
     AssistantView()
-        .modelContainer(for: TaskItem.self, inMemory: true)
+        .modelContainer(for: [TaskItem.self, EntityMemory.self], inMemory: true)
 }

@@ -181,13 +181,24 @@ from `IMPLEMENTATION-LOG.md`'s "Next actions" before considering Milestone 1 tru
 
 ## Milestone 8 — Entity Memory (swipe-final-architecture.md, Phase 3)
 
-- [ ] **EM-1** Add an `EntityMemory` SwiftData `@Model` (entity, type, categoryHint, frequency,
-      confidence, lastSeen, source), following the existing `TaskItem`/`NoteLine` conventions (plain
-      `var` properties, UUID-reference-not-`@Relationship` style, added to the app's
-      `.modelContainer` list in `AiTaskAssistantApp.swift`).
-- [ ] **EM-2** Wire stage 3 (resolution + confidence boost/lower) and stage 6 (user correction →
-      confidence 1.0 overwrite) per §7. No hardcoded global entity lists — per-user learned entities
-      only.
+- [x] **EM-1** Added `EntityMemory` SwiftData `@Model` (`entity`, `type`, `categoryHint`,
+      `frequency`, `confidence`, `lastSeen`, `source`), following `TaskItem`/`NoteLine`'s exact
+      conventions. Registered in all 4 `.modelContainer` call sites (`AiTaskAssistantApp.swift`
+      plus 3 `#Preview` blocks in `ContentView.swift`/`NoteView.swift`/`AssistantView.swift`).
+- [x] **EM-2** (partial) `EntityMemoryService.recordMention`/`recordCorrection` implement stage 6
+      (user correction → confidence 1.0 overwrite, wired from `TaskEditView`'s "Done" button via an
+      on-appear snapshot + diff of `place`) and the AUTO side of stage 3's recording rules (unknown
+      entity → low confidence; repeat mention → frequency grows, confidence climbs, capped at 1.0 —
+      wired from `NoteView.reparse`). No hardcoded global entity lists — per-user learned entities
+      only. **Not done**: actually feeding entity memory back into extraction confidence (the
+      "resolution + confidence adjustment" half of stage 3) — needs real accumulated data to design
+      a defensible formula against, and a distinct API change to `RuleBasedExtractionService`. Also
+      not done: person/thing entity extraction — the engine only extracts `place` today, so
+      `EntityType.person`/`.thing` are modeled but never populated.
+- [ ] **EM-2b** Wire entity memory into extraction confidence (stage 3's other half) once there's
+      enough real recorded data to calibrate against.
+- [ ] **EM-2c** Person/thing entity extraction — a prerequisite for EM-2/EM-2b to ever populate
+      `EntityType.person`/`.thing`; doesn't exist in the engine at all today.
 - [ ] **EM-3** Optional Contacts seeding at onboarding (permission-gated) to mitigate cold start.
 
 ## Milestone 9 — Foundation Models Fallback (swipe-final-architecture.md, Phase 4)

@@ -5,6 +5,9 @@ struct TaskEditView: View {
     @Bindable var task: TaskItem
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    // Milestone 8: snapshot on appear so the "Done" handler can tell whether the user actually
+    // changed `place` (a ground-truth correction) vs. leaving it as the engine extracted it.
+    @State private var originalPlace: String?
 
     var body: some View {
         NavigationStack {
@@ -100,9 +103,13 @@ struct TaskEditView: View {
             }
             .navigationTitle("Edit Task")
             .navigationBarTitleDisplayMode(.inline)
+            .onAppear { originalPlace = task.place }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
+                        if let newPlace = task.place, !newPlace.isEmpty, newPlace != originalPlace {
+                            EntityMemoryService.recordCorrection(newPlace, type: .place, categoryHint: task.category, context: modelContext)
+                        }
                         try? modelContext.save()
                         dismiss()
                     }

@@ -34,6 +34,9 @@
 		A1000028 /* pt.json in Resources */ = {isa = PBXBuildFile; fileRef = A2000032 /* pt.json */; };
 		A1000029 /* nl.json in Resources */ = {isa = PBXBuildFile; fileRef = A2000033 /* nl.json */; };
 		A1000030 /* pl.json in Resources */ = {isa = PBXBuildFile; fileRef = A2000034 /* pl.json */; };
+		A1000031 /* EntityMemory.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000035 /* EntityMemory.swift */; };
+		A1000032 /* EntityMemoryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000036 /* EntityMemoryService.swift */; };
+		A1000033 /* EntityMemoryServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000037 /* EntityMemoryServiceTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -67,6 +70,9 @@
 		A2000032 /* pt.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = pt.json; sourceTree = "<group>"; };
 		A2000033 /* nl.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = nl.json; sourceTree = "<group>"; };
 		A2000034 /* pl.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = pl.json; sourceTree = "<group>"; };
+		A2000035 /* EntityMemory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntityMemory.swift; sourceTree = "<group>"; };
+		A2000036 /* EntityMemoryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntityMemoryService.swift; sourceTree = "<group>"; };
+		A2000037 /* EntityMemoryServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntityMemoryServiceTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -117,6 +123,7 @@
 				A2000008 /* AiTaskAssistantTests.swift */,
 				A2000021 /* ExtractionCorpus.swift */,
 				A2000022 /* ExtractionAccuracyTests.swift */,
+				A2000037 /* EntityMemoryServiceTests.swift */,
 			);
 			path = AiTaskAssistantTests;
 			sourceTree = "<group>";
@@ -157,6 +164,7 @@
 				A2000005 /* TaskItem.swift */,
 				A2000023 /* SupportedLanguage.swift */,
 				A2000025 /* NoteLine.swift */,
+				A2000035 /* EntityMemory.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -168,6 +176,7 @@
 				A2000026 /* LanguagePack.swift */,
 				A2000014 /* SpeechRecognizer.swift */,
 				A2000015 /* NotificationService.swift */,
+				A2000036 /* EntityMemoryService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -309,6 +318,8 @@
 				A1000020 /* OnboardingLanguageView.swift in Sources */,
 				A1000021 /* NoteLine.swift in Sources */,
 				A1000022 /* LanguagePack.swift in Sources */,
+				A1000031 /* EntityMemory.swift in Sources */,
+				A1000032 /* EntityMemoryService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -319,6 +330,7 @@
 				A1000008 /* AiTaskAssistantTests.swift in Sources */,
 				A1000017 /* ExtractionCorpus.swift in Sources */,
 				A1000018 /* ExtractionAccuracyTests.swift in Sources */,
+				A1000033 /* EntityMemoryServiceTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
