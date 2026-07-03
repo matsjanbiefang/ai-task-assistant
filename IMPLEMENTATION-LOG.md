@@ -1497,3 +1497,42 @@ STT-1's mechanism is verified by CI (must be a true no-op against the corpus sui
 unit tests; STT-2's Levenshtein/fuzzy-match correctness is verified by unit tests. Neither can be
 verified against *real* STT output — there's still no dictation-error corpus, and building one
 needs the real-device pass Milestone 2's U2-2 is already waiting on.
+
+## Emergency fix — EntityMemory writes disabled (real on-device crash, build 10)
+
+The real-device pass finally happened — build 10 went to TestFlight and immediately started
+crashing. Two crash reports pulled directly from App Store Connect's TestFlight crash feedback
+(iPhone 14, iOS 26.5), both `EXC_CRASH`/`SIGABRT` from a `swift_dynamicCastFailure` at the *same
+instruction* deep inside SwiftData's `DefaultStore.createSnapshot`:
+
+1. `NoteView.commitLine → reparse → EntityMemoryService.recordMention → find →
+   context.fetch(FetchDescriptor<EntityMemory>())` — crash during a **fetch**.
+2. `NoteView.commitCompose → reparse → ModelContext.save() → DefaultStore.save → serialize →
+   createSnapshot` — crash during a **save**, on a *completely fresh install* (process launched
+   at 22:06:03, crashed at 22:07:14 — no migration history, no prior local data at all).
+
+The second crash rules out "stale migration state from many prior builds" — the original working
+theory after crash #1 — since it reproduced within a minute of a clean install. `EntityMemory`'s
+model (`EntityMemory.swift`) is about as simple as a `@Model` gets (`UUID`, `String`, `Int`,
+`Double`, `Date`, no native enums, no relationships), so this doesn't look like a mistake in our
+schema. Web research (Apple Developer Forums, Hacking with Swift) surfaced the same *family* of
+crash — `Could not cast value of type '__NSCFNumber' to 'NSString'` inside SwiftData, explicitly
+flagged as happening "particularly on newer iOS versions" — but no exact match for this signature
+or a documented fix. Best current read: an iOS 26.5-era SwiftData runtime bug in the
+fetch/save-snapshot path, not something fixable by changing how `EntityMemory` is declared.
+
+Given nothing in the app actually *reads* `EntityMemory` yet (EM-2b, wiring fuzzy/confidence
+lookups into extraction, was already deferred back in Milestone 8/10) — it's pure write-only
+telemetry — the pragmatic emergency fix is to **disable both write call sites** rather than debug
+an unproven SwiftData framework bug under time pressure with a crashing app in testers' hands:
+
+- `NoteView.swift` (`reparse`, the `EntityMemoryService.recordMention` hook added in Milestone 8)
+- `TaskEditView.swift` (the `Button("Done")` handler's `EntityMemoryService.recordCorrection` hook)
+
+Both are commented out in place (not deleted) with the crash signature and reasoning inline, so
+whoever picks this back up has the full context without re-deriving it. `EntityMemoryService`,
+`EntityMemory` itself, and all of Milestone 10's STT-2 work (`fuzzyMatch`/`levenshteinDistance`,
+already unwired) are untouched — this only stops the two places that ever write an `EntityMemory`
+row. Functionally this costs nothing today; it just pauses accumulating data for a feature that
+doesn't consume it yet. Real fix (root-causing the SwiftData crash, or re-enabling once Apple
+ships a fix) is a follow-up, not resolved here.

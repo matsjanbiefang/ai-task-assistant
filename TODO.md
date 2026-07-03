@@ -203,16 +203,26 @@ from `IMPLEMENTATION-LOG.md`'s "Next actions" before considering Milestone 1 tru
       `frequency`, `confidence`, `lastSeen`, `source`), following `TaskItem`/`NoteLine`'s exact
       conventions. Registered in all 4 `.modelContainer` call sites (`AiTaskAssistantApp.swift`
       plus 3 `#Preview` blocks in `ContentView.swift`/`NoteView.swift`/`AssistantView.swift`).
-- [x] **EM-2** (partial) `EntityMemoryService.recordMention`/`recordCorrection` implement stage 6
-      (user correction → confidence 1.0 overwrite, wired from `TaskEditView`'s "Done" button via an
-      on-appear snapshot + diff of `place`) and the AUTO side of stage 3's recording rules (unknown
-      entity → low confidence; repeat mention → frequency grows, confidence climbs, capped at 1.0 —
-      wired from `NoteView.reparse`). No hardcoded global entity lists — per-user learned entities
-      only. **Not done**: actually feeding entity memory back into extraction confidence (the
-      "resolution + confidence adjustment" half of stage 3) — needs real accumulated data to design
-      a defensible formula against, and a distinct API change to `RuleBasedExtractionService`. Also
-      not done: person/thing entity extraction — the engine only extracts `place` today, so
-      `EntityType.person`/`.thing` are modeled but never populated.
+- [x] **EM-2** (partial, **currently disabled** — see EM-2d) `EntityMemoryService.recordMention`/
+      `recordCorrection` implement stage 6 (user correction → confidence 1.0 overwrite, wired from
+      `TaskEditView`'s "Done" button via an on-appear snapshot + diff of `place`) and the AUTO side
+      of stage 3's recording rules (unknown entity → low confidence; repeat mention → frequency
+      grows, confidence climbs, capped at 1.0 — wired from `NoteView.reparse`). No hardcoded global
+      entity lists — per-user learned entities only. **Not done**: actually feeding entity memory
+      back into extraction confidence (the "resolution + confidence adjustment" half of stage 3) —
+      needs real accumulated data to design a defensible formula against, and a distinct API change
+      to `RuleBasedExtractionService`. Also not done: person/thing entity extraction — the engine
+      only extracts `place` today, so `EntityType.person`/`.thing` are modeled but never populated.
+- [ ] **EM-2d** (new, urgent) Both `EM-2` call sites are commented out as an emergency crash fix —
+      see IMPLEMENTATION-LOG.md's "Emergency fix" entry. Real crash logs from TestFlight build 10
+      (2026-07-03, iPhone 14 / iOS 26.5) show a reproducible `EXC_CRASH`/`SIGABRT`
+      (`swift_dynamicCastFailure` inside SwiftData's `DefaultStore.createSnapshot`) on both fetch
+      (`EntityMemoryService.find`) and save (`ModelContext.save()`) paths involving `EntityMemory`
+      — reproducible even on a completely fresh install, so not a migration/stale-data issue. No
+      documented fix found; looks like an iOS 26.5-era SwiftData bug, not a schema mistake (the
+      model is plain primitives, no native enums, no relationships). Needs either a real fix
+      (workaround the specific SwiftData bug, once identified) or a deliberate decision to
+      re-architect how `EntityMemory` is persisted before re-enabling.
 - [ ] **EM-2b** Wire entity memory into extraction confidence (stage 3's other half) once there's
       enough real recorded data to calibrate against.
 - [ ] **EM-2c** Person/thing entity extraction — a prerequisite for EM-2/EM-2b to ever populate

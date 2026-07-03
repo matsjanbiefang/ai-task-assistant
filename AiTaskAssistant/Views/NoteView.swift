@@ -495,9 +495,19 @@ struct NoteView: View {
                 timeOfDay: task.timeOfDay
             )
             modelContext.insert(item)
-            if let place = item.place {
-                EntityMemoryService.recordMention(place, type: .place, categoryHint: item.category, context: modelContext)
-            }
+            // Temporarily disabled: EntityMemoryService.recordMention(place:...) reproducibly
+            // crashes on-device (TestFlight builds 10) with EXC_CRASH/SIGABRT — a
+            // swift_dynamicCastFailure deep inside SwiftData's DefaultStore.createSnapshot,
+            // confirmed via two real crash logs (one during the fetch in
+            // EntityMemoryService.find, one during this line's ModelContext.save()), reproducible
+            // even on a completely fresh install. No known fix found (looks like an iOS
+            // 26.5-era SwiftData bug, not a mistake in EntityMemory's schema). Safe to disable:
+            // nothing reads EntityMemory yet (EM-2b, wiring it into extraction, was already
+            // deferred), so this is pure write-only telemetry — losing it costs nothing
+            // functional while this is investigated further.
+            // if let place = item.place {
+            //     EntityMemoryService.recordMention(place, type: .place, categoryHint: item.category, context: modelContext)
+            // }
             if let date = item.dueDate, date > .now {
                 await NotificationService.shared.schedule(taskID: item.id.uuidString, title: item.title, at: date)
             }

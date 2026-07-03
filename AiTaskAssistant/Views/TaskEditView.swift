@@ -107,9 +107,14 @@ struct TaskEditView: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
-                        if let newPlace = task.place, !newPlace.isEmpty, newPlace != originalPlace {
-                            EntityMemoryService.recordCorrection(newPlace, type: .place, categoryHint: task.category, context: modelContext)
-                        }
+                        // Temporarily disabled: see the matching note in NoteView.reparse — this
+                        // hook hits the same reproducible on-device SwiftData crash
+                        // (swift_dynamicCastFailure in DefaultStore.createSnapshot) via
+                        // EntityMemoryService's fetch/save path. Nothing reads EntityMemory yet,
+                        // so disabling this costs no functionality while it's investigated.
+                        // if let newPlace = task.place, !newPlace.isEmpty, newPlace != originalPlace {
+                        //     EntityMemoryService.recordCorrection(newPlace, type: .place, categoryHint: task.category, context: modelContext)
+                        // }
                         try? modelContext.save()
                         dismiss()
                     }
