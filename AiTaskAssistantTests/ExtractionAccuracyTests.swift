@@ -80,6 +80,68 @@ private func scoreCorpus() -> [(caseID: Int, focus: CorpusFocus, lineIndex: Int,
     return results
 }
 
+// Milestone 7 (CG-2, swipe-final-architecture.md §6): threshold-calibration tooling. Diagnostic
+// only — reports real numbers, does not (yet) replace RuleBasedExtractionService's fixed
+// `lowConfidenceThreshold`. Wiring calibrated per-language values into the runtime gate is
+// deferred (CG-2b): today's corpus has only ~5 cases for each Batch 1 language, nowhere near
+// enough to trust a 98%-precision estimate from, and replacing a single global threshold with a
+// per-language one is a real data-structure + call-site change of its own.
+
+private struct ConfidenceSample {
+    let language: String   // NLLanguage.rawValue, e.g. "en", "de"
+    let confidence: Double // ExtractedTask.dateConfidence
+    let correct: Bool      // actual.dueDate == expected.dueDate
+}
+
+/// One sample per paired task across the whole corpus, tagged with the same language
+/// classification the runtime pipeline itself would use for that line. Lines where the split
+/// count didn't match are skipped — there's no valid actual/expected pairing to sample from.
+private func calibrationSamples() -> [ConfidenceSample] {
+    let service = RuleBasedExtractionService.shared
+    var samples: [ConfidenceSample] = []
+    for testCase in extractionCorpus {
+        let lines = nonEmptyLines(testCase.input)
+        for (index, line) in lines.enumerated() {
+            let actual = service.extractLine(line, referenceDate: corpusToday)
+            let expected = index < testCase.expected.count ? testCase.expected[index] : []
+            guard actual.count == expected.count else { continue }
+            let language = service.detectLanguage(line).rawValue
+            for (a, e) in zip(actual, expected) {
+                samples.append(ConfidenceSample(language: language, confidence: a.dateConfidence, correct: a.dueDate == e.dueDate))
+            }
+        }
+    }
+    return samples
+}
+
+/// Lowest confidence threshold t such that precision (fraction correct) among samples with
+/// confidence >= t is >= targetPrecision, or nil if no threshold reaches it. Sweeps only at
+/// distinct observed confidence values — precision can't change between them, so this can't miss
+/// the true optimum the way an arbitrary fixed-step grid could.
+private func calibrateThreshold(_ samples: [ConfidenceSample], targetPrecision: Double = 0.98) -> Double? {
+    let candidates = Set(samples.map(\.confidence)).sorted()
+    for t in candidates {
+        let above = samples.filter { $0.confidence >= t }
+        guard !above.isEmpty else { continue }
+        let precision = Double(above.filter(\.correct).count) / Double(above.count)
+        if precision >= targetPrecision { return t }
+    }
+    return nil
+}
+
+private let minimumCalibrationSampleSize = 20
+
+private func describeCalibration(_ label: String, _ samples: [ConfidenceSample]) -> String {
+    let sizeNote = samples.count < minimumCalibrationSampleSize
+        ? " — insufficient sample size for a reliable calibration (need >= \(minimumCalibrationSampleSize))"
+        : ""
+    if let t = calibrateThreshold(samples) {
+        return "  \(label): t=\(t) (n=\(samples.count))\(sizeNote)"
+    } else {
+        return "  \(label): no threshold reaches 98% precision (n=\(samples.count))\(sizeNote)"
+    }
+}
+
 struct ExtractionAccuracyTests {
 
     @Test(arguments: extractionCorpus)
@@ -151,6 +213,21 @@ struct ExtractionAccuracyTests {
         // §10 exit criterion for Milestone 0. Expected to fail until U0-8 iterates the rules to
         // close the gap — do not raise/lower this to make the suite pass; fix the engine instead.
         #expect(accuracy >= 0.9, "overall accuracy \(Int(accuracy * 100))% is below the §10 target of 90%")
+    }
+
+    // Milestone 7 (CG-2): threshold-calibration tooling. Diagnostic only — see the comment above
+    // `ConfidenceSample` for why this doesn't (yet) replace the app's fixed threshold.
+    @Test
+    func confidenceGateCalibration() {
+        let samples = calibrationSamples()
+        print("--- Confidence gate calibration (CG-2, diagnostic only — not yet wired into the app) ---")
+        print(describeCalibration("overall", samples))
+
+        var byLanguage: [String: [ConfidenceSample]] = [:]
+        for sample in samples { byLanguage[sample.language, default: []].append(sample) }
+        for language in byLanguage.keys.sorted() {
+            print(describeCalibration(language, byLanguage[language]!))
+        }
     }
 
     // Category is deliberately excluded from the scored corpus (see ExtractionCorpus.swift's own
