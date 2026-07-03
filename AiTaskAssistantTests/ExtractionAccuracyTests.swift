@@ -28,16 +28,53 @@ private func nonEmptyLines(_ input: String) -> [String] {
         .filter { !$0.isEmpty }
 }
 
-/// Runs every corpus case and returns per-line pass/fail, tagged with the case's focus category.
-private func scoreCorpus() -> [(caseID: Int, focus: CorpusFocus, lineIndex: Int, passed: Bool)] {
+// Milestone 7 (CG-1, swipe-final-architecture.md §6): per-field breakdown for one corpus line,
+// kept separate from `matches()` (used by `corpusCase(_:)`) so that test's existing per-line
+// assertions and failure messages are untouched by this addition. `passed` is constructed to be
+// exactly `matches()`'s logic (same length guard, same four-field check), so switching
+// `scoreCorpus()` over to this struct cannot change the overall accuracy number.
+private struct LineFieldScore {
+    let splitCountMatches: Bool   // actual.count == expected.count
+    let expectedSplit: Bool       // expected.count > 1
+    let actualSplit: Bool         // actual.count > 1
+    let titleMatches: [Bool]      // one entry per paired task; empty when splitCountMatches == false
+    let dueDateMatches: [Bool]
+    let dueTimeMatches: [Bool]
+    let priorityMatches: [Bool]
+
+    var passed: Bool {
+        splitCountMatches
+            && titleMatches.allSatisfy { $0 }
+            && dueDateMatches.allSatisfy { $0 }
+            && dueTimeMatches.allSatisfy { $0 }
+            && priorityMatches.allSatisfy { $0 }
+    }
+}
+
+private func fieldScore(_ actual: [ExtractedTask], _ expected: [ExpectedTask]) -> LineFieldScore {
+    let splitCountMatches = actual.count == expected.count
+    let pairs = splitCountMatches ? Array(zip(actual, expected)) : []
+    return LineFieldScore(
+        splitCountMatches: splitCountMatches,
+        expectedSplit: expected.count > 1,
+        actualSplit: actual.count > 1,
+        titleMatches: pairs.map { $0.0.title == $0.1.title },
+        dueDateMatches: pairs.map { $0.0.dueDate == $0.1.dueDate },
+        dueTimeMatches: pairs.map { $0.0.dueTime == $0.1.dueTime },
+        priorityMatches: pairs.map { $0.0.priority == $0.1.priority }
+    )
+}
+
+/// Runs every corpus case and returns per-line field-level scoring, tagged with the case's focus category.
+private func scoreCorpus() -> [(caseID: Int, focus: CorpusFocus, lineIndex: Int, score: LineFieldScore)] {
     let service = RuleBasedExtractionService.shared
-    var results: [(caseID: Int, focus: CorpusFocus, lineIndex: Int, passed: Bool)] = []
+    var results: [(caseID: Int, focus: CorpusFocus, lineIndex: Int, score: LineFieldScore)] = []
     for testCase in extractionCorpus {
         let lines = nonEmptyLines(testCase.input)
         for (index, line) in lines.enumerated() {
             let actual = service.extractLine(line, referenceDate: corpusToday)
             let expected = index < testCase.expected.count ? testCase.expected[index] : []
-            results.append((testCase.id, testCase.focus, index, matches(actual, expected)))
+            results.append((testCase.id, testCase.focus, index, fieldScore(actual, expected)))
         }
     }
     return results
@@ -66,14 +103,14 @@ struct ExtractionAccuracyTests {
     func overallAccuracyMeetsTarget() {
         let results = scoreCorpus()
         let total = results.count
-        let correct = results.filter(\.passed).count
+        let correct = results.filter(\.score.passed).count
         let accuracy = total == 0 ? 0 : Double(correct) / Double(total)
 
         var byFocus: [CorpusFocus: (correct: Int, total: Int)] = [:]
         for result in results {
             var bucket = byFocus[result.focus] ?? (0, 0)
             bucket.total += 1
-            if result.passed { bucket.correct += 1 }
+            if result.score.passed { bucket.correct += 1 }
             byFocus[result.focus] = bucket
         }
 
@@ -83,6 +120,33 @@ struct ExtractionAccuracyTests {
             let pct = bucket.total == 0 ? 0 : Int(Double(bucket.correct) / Double(bucket.total) * 100)
             print("  \(focus.rawValue): \(bucket.correct)/\(bucket.total) (\(pct)%)")
         }
+
+        // Milestone 7 (CG-1): per-field accuracy, reported separately per swipe-final-architecture.md
+        // §6 ("blended single numbers are never reported alone") — diagnostic only, not its own gate
+        // yet (that's CG-2's calibrated threshold work, deferred).
+        func fieldPct(_ matches: [Bool]) -> String {
+            guard !matches.isEmpty else { return "n/a" }
+            let correct = matches.filter { $0 }.count
+            return "\(correct)/\(matches.count) (\(Int(Double(correct) / Double(matches.count) * 100))%)"
+        }
+        print("--- Per-field accuracy ---")
+        print("  title: \(fieldPct(results.flatMap(\.score.titleMatches)))")
+        print("  dueDate: \(fieldPct(results.flatMap(\.score.dueDateMatches)))")
+        print("  dueTime: \(fieldPct(results.flatMap(\.score.dueTimeMatches)))")
+        print("  priority: \(fieldPct(results.flatMap(\.score.priorityMatches)))")
+
+        // Milestone 7 (CG-1): segmentation precision/recall tracked on its own — "of lines that
+        // should have split, how many did" (recall) and "of lines that did split, how many were
+        // supposed to" (precision). Correctness bar is exact split count match, same bar the corpus
+        // already scores elsewhere (`splitCountMatches`).
+        let expectedSplitLines = results.filter(\.score.expectedSplit)
+        let actualSplitLines = results.filter(\.score.actualSplit)
+        let correctSplits = results.filter { $0.score.expectedSplit && $0.score.actualSplit && $0.score.splitCountMatches }
+        let recall = expectedSplitLines.isEmpty ? 1.0 : Double(correctSplits.count) / Double(expectedSplitLines.count)
+        let precision = actualSplitLines.isEmpty ? 1.0 : Double(correctSplits.count) / Double(actualSplitLines.count)
+        print("--- Segmentation ---")
+        print("  precision: \(Int(precision * 100))% (\(correctSplits.count)/\(actualSplitLines.count) split predictions correct)")
+        print("  recall: \(Int(recall * 100))% (\(correctSplits.count)/\(expectedSplitLines.count) expected splits found)")
 
         // §10 exit criterion for Milestone 0. Expected to fail until U0-8 iterates the rules to
         // close the gap — do not raise/lower this to make the suite pass; fix the engine instead.

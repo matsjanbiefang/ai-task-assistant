@@ -71,10 +71,11 @@ struct AssistantView: View {
                 }
                 HStack(spacing: 6) {
                     if let date = task.dueDate {
+                        let isLowConfidence = RuleBasedExtractionService.isLowConfidence(task.dateConfidence)
                         Text(date.formatted(.dateTime.month(.abbreviated).day()))
                             .font(.caption)
-                            .foregroundStyle(task.dateConfidence < 0.7 ? .orange : .secondary)
-                        if task.dateConfidence < 0.7 {
+                            .foregroundStyle(isLowConfidence ? .orange : .secondary)
+                        if isLowConfidence {
                             Image(systemName: "questionmark.circle")
                                 .font(.caption2)
                                 .foregroundStyle(.orange)
