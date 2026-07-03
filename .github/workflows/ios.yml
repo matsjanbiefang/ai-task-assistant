@@ -83,3 +83,48 @@ jobs:
       - name: Fail job if tests failed
         if: steps.run_tests.outcome == 'failure'
         run: exit 1
+
+  # Milestone 9 (swipe-final-architecture.md §5): additive, non-blocking — verifies
+  # FoundationModelsFallback.swift actually compiles against a real iOS 26 SDK (the `build` job
+  # above uses Xcode 16.4, where FoundationModels doesn't exist in the SDK at all, so
+  # `#if canImport(FoundationModels)` there just excludes that code — zero signal on whether the
+  # guarded code itself is correct). continue-on-error: true because this is a bonus verification
+  # signal for code that isn't wired into the shipping app's control flow yet, not a release gate —
+  # an unrelated Xcode-26-runner-image quirk shouldn't block a PR over code nothing calls yet.
+  foundation-models-compile-check:
+    runs-on: macos-15
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Confirmed present on macos-15 alongside the 16.x line (see IMPLEMENTATION-LOG.md,
+      # Milestone 9) — re-verify against the runner-images README if this ever starts failing to
+      # find the app bundle, since exact point releases roll on a monthly-ish cadence.
+      - name: Select Xcode 26
+        run: sudo xcode-select -s /Applications/Xcode_26.3.app
+
+      - name: Find an available iPhone simulator
+        id: sim
+        run: |
+          UDID=$(xcrun simctl list devices available -j \
+            | jq -r '.devices | to_entries[] | .value[] | select(.name | test("iPhone")) | .udid' \
+            | head -1)
+          if [ -z "$UDID" ]; then
+            echo "No available iPhone simulator found:" >&2
+            xcrun simctl list devices available >&2
+            exit 1
+          fi
+          echo "Using simulator $UDID"
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+
+      - name: Build with Xcode 26 (compiles FoundationModelsFallback.swift for real)
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project AiTaskAssistant.xcodeproj \
+            -scheme AiTaskAssistant \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            | (command -v xcpretty >/dev/null && xcpretty || cat)

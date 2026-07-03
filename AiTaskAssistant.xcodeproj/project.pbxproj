@@ -37,6 +37,7 @@
 		A1000031 /* EntityMemory.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000035 /* EntityMemory.swift */; };
 		A1000032 /* EntityMemoryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000036 /* EntityMemoryService.swift */; };
 		A1000033 /* EntityMemoryServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000037 /* EntityMemoryServiceTests.swift */; };
+		A1000034 /* FoundationModelsFallback.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000038 /* FoundationModelsFallback.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -73,6 +74,7 @@
 		A2000035 /* EntityMemory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntityMemory.swift; sourceTree = "<group>"; };
 		A2000036 /* EntityMemoryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntityMemoryService.swift; sourceTree = "<group>"; };
 		A2000037 /* EntityMemoryServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntityMemoryServiceTests.swift; sourceTree = "<group>"; };
+		A2000038 /* FoundationModelsFallback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoundationModelsFallback.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -177,6 +179,7 @@
 				A2000014 /* SpeechRecognizer.swift */,
 				A2000015 /* NotificationService.swift */,
 				A2000036 /* EntityMemoryService.swift */,
+				A2000038 /* FoundationModelsFallback.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -320,6 +323,7 @@
 				A1000022 /* LanguagePack.swift in Sources */,
 				A1000031 /* EntityMemory.swift in Sources */,
 				A1000032 /* EntityMemoryService.swift in Sources */,
+				A1000034 /* FoundationModelsFallback.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
