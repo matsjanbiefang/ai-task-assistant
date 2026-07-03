@@ -161,16 +161,23 @@ from `IMPLEMENTATION-LOG.md`'s "Next actions" before considering Milestone 1 tru
 
 ## Milestone 7 — Confidence Gate Calibration (swipe-final-architecture.md, Phase 2)
 
-- [ ] **CG-1** Extend the corpus scorer to report per-field accuracy (title / date / time /
-      priority / category / segmentation) separately, not just per-line pass/fail and per-`focus`
-      bucket (today's `ExtractionAccuracyTests` only has the latter — see IMPLEMENTATION-LOG.md).
-      Segmentation split precision/recall tracked on its own, per §6.
+- [x] **CG-1** (partial) Extend the corpus scorer to report per-field accuracy (title / date /
+      time / priority) and segmentation precision/recall separately, not just per-line pass/fail
+      and per-`focus` bucket — both derivable from the existing 101-case corpus with zero schema
+      changes; new `LineFieldScore`/`fieldScore()` in `ExtractionAccuracyTests.swift`, printed as
+      diagnostics (not yet a hard-gated assertion — that's CG-2). **Category scoring deferred**:
+      `category` is deliberately excluded from `ExpectedTask` (see its own policy comment) — adding
+      it means deciding whether to backfill all 101 cases or make it optional/incremental; not
+      attempted in this pass.
 - [ ] **CG-2** Build threshold-calibration tooling: run the corpus rules-only, sweep the gate
       threshold, pick the lowest value where precision on above-threshold tasks ≥ 98%, per language.
-      Re-run as part of the regression suite on every engine or pack change.
-- [ ] **CG-3** Centralize the confidence gate — today's `dateConfidence < 0.7` check is duplicated
-      as a literal in both `NoteView.swift` and `AssistantView.swift`, and only covers date
-      confidence (no title/priority/segmentation confidence exists yet).
+      Re-run as part of the regression suite on every engine or pack change. Needs per-*task* (not
+      per-line) granularity and a way to know each corpus case's language — neither exists yet.
+- [x] **CG-3** Centralize the confidence gate — `RuleBasedExtractionService.isLowConfidence(_:)` /
+      `.lowConfidenceThreshold` replaces the `dateConfidence < 0.7` literal previously duplicated in
+      both `NoteView.swift` and `AssistantView.swift`. Still date-confidence-only (no
+      title/priority/segmentation confidence exists yet) — CG-2's calibrated threshold is the next
+      thing to plug in here.
 
 ## Milestone 8 — Entity Memory (swipe-final-architecture.md, Phase 3)
 

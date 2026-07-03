@@ -439,7 +439,7 @@ struct NoteView: View {
 
         let extracted = extraction.extractLine(line.text, primaryLanguageCode: primaryLanguageCode)
         line.taskCount = extracted.count
-        line.hasLowConfidence = extracted.contains { $0.dateConfidence < 0.7 }
+        line.hasLowConfidence = extracted.contains { RuleBasedExtractionService.isLowConfidence($0.dateConfidence) }
 
         for task in extracted {
             let dueDate = parsedDate(task.dueDate)

@@ -33,6 +33,18 @@ struct ExtractedTask: Sendable {
     var timeOfDay: String? = nil
 }
 
+// Milestone 7 (CG-3, swipe-final-architecture.md §6): the single definition of "low confidence" —
+// previously a `dateConfidence < 0.7` literal duplicated separately in NoteView and AssistantView.
+// A future calibrated per-language threshold (CG-2) replaces `lowConfidenceThreshold` here; this is
+// the only place that change needs to happen.
+extension RuleBasedExtractionService {
+    static let lowConfidenceThreshold = 0.7
+
+    static func isLowConfidence(_ dateConfidence: Double) -> Bool {
+        dateConfidence < lowConfidenceThreshold
+    }
+}
+
 // Feedback round 3 (§Stage 4): reduces a full action clause to its head phrase when the WHOLE
 // clause matches — "go to the hospital" -> "Hospital". `template`'s "$1" is replaced with capture
 // group 1, which also becomes the task's place.

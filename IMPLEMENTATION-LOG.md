@@ -1195,3 +1195,50 @@ public, polling PR/CI state via the unauthenticated GitHub REST API instead of `
 Actions log output for a specific failed step still needed the browser (job logs and artifact
 downloads both 403 without auth on the API), which did work once navigated directly and the
 step's log group was expanded.
+
+## Milestone 7 (safe slice) — Centralized Confidence Gate + Per-Field/Segmentation Scoring
+
+Second pass through `swipe-final-architecture.md`'s phases, following Milestone 0.6. Scoped down
+(per explicit decision) to the parts of CG-1/CG-3 that needed zero corpus schema changes and no new
+design work, deferring category scoring and CG-2's threshold-calibration tooling — both are
+genuinely different, larger pieces of work (category needs a corpus-schema decision; calibration
+needs per-task, per-language granularity that doesn't exist anywhere in the harness yet).
+
+**CG-3 — centralized the gate.** `RuleBasedExtractionService.isLowConfidence(_:)` /
+`.lowConfidenceThreshold` (added right after the `ExtractedTask` schema, since it's a domain concept
+both view files need) replaces the `dateConfidence < 0.7` literal that was independently duplicated
+three times: once in `NoteView.reparse` (setting `NoteLine.hasLowConfidence`) and twice in
+`AssistantView.taskRow` (once for due-date text color, once for the icon condition — literally the
+same comparison evaluated twice in the same block). `AssistantView` needed no new import; same app
+target.
+
+**CG-1 (partial) — per-field + segmentation scoring, no schema changes.** The corpus test harness
+(`ExtractionAccuracyTests.swift`) previously fused title/date/time/priority/split-count into one
+opaque `Bool` per line via `matches()` — there was no way to tell "date was wrong" from "title was
+wrong" without re-deriving it by hand. Added `LineFieldScore` + `fieldScore()` as a sibling to
+`matches()`, deliberately not a replacement: `matches()` and the per-case `corpusCase(_:)` test
+(101 parameterized assertions, one per corpus case) are completely untouched, so their existing
+pass/fail behavior and failure messages carry zero risk from this change. Only `scoreCorpus()`'s
+return type changed (bare `Bool` → `LineFieldScore`), and its only consumer,
+`overallAccuracyMeetsTarget()`, was updated in the same pass — `LineFieldScore.passed` is
+constructed to be logically identical to `matches()` (same length guard, same four-field
+`allSatisfy`), so the actual asserted `accuracy >= 0.9` gate and its number are provably unchanged,
+only the diagnostic detail around it grew. Segmentation precision/recall needed no new corpus data
+at all — `expected.count > 1` vs `actual.count > 1` per line was already fully present in the
+existing fixture; the only work was aggregating it (TP = both split and split-count exactly right,
+same correctness bar the corpus already uses elsewhere). Both new blocks print as diagnostics only,
+matching the existing precedent that the per-`focus` breakdown is also print-only, not a second
+hard-gated assertion — that's what CG-2 will introduce once it exists.
+
+**Deferred and why:** category accuracy needs `ExpectedTask` to gain a `category` field — `category`
+is *deliberately* excluded from the scored corpus today (`ExtractionCorpus.swift`'s own policy
+comment: "category is deliberately not scored... category isn't one of them"), a real design
+decision from `prd-update-01.md` §10 that shouldn't be silently overridden by just bolting a field
+on. The natural fix (make it optional, nil = "not scored for this case," backfill incrementally as
+cases fail — matching the corpus's own "grows from failures, not exhaustively backfilled"
+philosophy) is a reasonable next step but wasn't done here to keep this pass's diff small and
+low-risk. CG-2's threshold-sweep calibration is a genuinely new algorithm, not a data or scoring-glue
+change — it needs per-*task* granularity (today's harness only scores per-*line*, and a line can
+produce multiple tasks) and a way to know which language each corpus case is actually testing
+(today only `CorpusFocus` exists, which is an input-pattern axis, not a language-code axis) — both
+missing pieces that deserve their own design pass rather than being rushed alongside this one.
