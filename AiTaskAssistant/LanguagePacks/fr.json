@@ -1,0 +1,77 @@
+{
+  "code": "fr",
+  "dateRules": {
+    "weekdayNames": {"dimanche": 1, "lundi": 2, "mardi": 3, "mercredi": 4, "jeudi": 5, "vendredi": 6, "samedi": 7},
+    "todayWords": ["aujourd'hui"],
+    "tomorrowWords": ["demain"],
+    "dayAfterTomorrowWords": ["après-demain"],
+    "numberWords": {"un": 1, "deux": 2, "trois": 3, "quatre": 4, "cinq": 5, "six": 6, "sept": 7, "huit": 8, "neuf": 9, "dix": 10},
+    "inDaysPattern": "\\bdans\\s+(\\d+|un|deux|trois|quatre|cinq|six|sept|huit|neuf|dix)\\s+jours?\\b",
+    "inWeeksPattern": "\\bdans\\s+(\\d+|un|deux|trois|quatre|cinq|six|sept|huit|neuf|dix)\\s+semaines?\\b",
+    "weekdayPhraseRules": [
+      {"pattern": "\\b(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)\\s+prochain\\b", "skipToday": true, "confidence": 0.85},
+      {"pattern": "\\bce\\s+(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)\\b", "skipToday": false, "confidence": 0.85},
+      {"pattern": "\\b(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)\\b", "skipToday": false, "confidence": 0.6}
+    ],
+    "nextWeekPattern": "\\bsemaine\\s+prochaine\\b"
+  },
+  "timeWords": {
+    "timePattern": "\\bà\\s+(\\d{1,2})\\s*h\\s*(\\d{2})?\\b",
+    "timeOfDayWords": {"midi": "12:00"},
+    "vagueTimeOfDayWords": {"matin": "Matin", "après-midi": "Après-midi", "soir": "Soir", "nuit": "Nuit"},
+    "laterOffsetWords": ["plus tard"]
+  },
+  "priorityKeywords": [
+    {"pattern": "^(urgent|asap|important|importante|priorité haute|haute priorité)\\b[:\\-–—]?\\s*", "priority": "high"},
+    {"pattern": "^(priorité basse|basse priorité|faible priorité)\\b[:\\-–—]?\\s*", "priority": "low"}
+  ],
+  "conjunctions": ["et"],
+  "splitClassifiers": ["puis"],
+  "actionVerbs": {
+    "imperativeVerbs": [
+      "appeler", "acheter", "finir", "préparer", "réserver", "payer", "nettoyer", "répondre",
+      "envoyer", "planifier", "réviser", "réparer", "renouveler", "annuler", "arroser",
+      "ranger", "rendre", "prendre", "penser", "faire", "apporter", "vérifier", "confirmer",
+      "soumettre", "commander"
+    ],
+    "verbSuffixes": []
+  },
+  "categoryKeywords": {
+    "work": ["travail", "réunion", "projet", "client", "bureau"],
+    "health": ["médecin", "dentiste", "rendez-vous", "gym", "santé"],
+    "shopping": ["acheter", "courses", "magasin"],
+    "finance": ["payer", "facture", "banque", "impôts"]
+  },
+  "locationPatterns": {
+    "placeKeywords": {
+      "hôpital": "Hôpital", "médecin": "Médecin", "dentiste": "Dentiste", "bureau": "Bureau",
+      "école": "École", "université": "Université", "supermarché": "Supermarché",
+      "pharmacie": "Pharmacie", "banque": "Banque", "gare": "Gare", "aéroport": "Aéroport",
+      "coiffeur": "Coiffeur", "poste": "Poste", "boulangerie": "Boulangerie",
+      "restaurant": "Restaurant", "église": "Église", "bibliothèque": "Bibliothèque"
+    },
+    "addressPattern": null
+  },
+  "detailClauseMarkers": {
+    "detailPatterns": [
+      "^(?:apporter|prendre)\\s+.+$",
+      "^penser\\s+à\\s+.+$",
+      "^ne\\s+pas\\s+oublier\\s+.+$"
+    ],
+    "detailContinuationPrefixes": ["avec", "pour"],
+    "referentialMarkers": ["avec moi", "avec nous"]
+  },
+  "stopwords": {
+    "words": ["s'il te plaît", "svp", "aussi"],
+    "connectorWords": ["à", "de", "le", "la"]
+  },
+  "fillerPhrases": [
+    "je dois", "je devrais", "je voudrais", "je veux", "il faut", "il faudrait",
+    "nous devons", "on doit", "penser à", "ne pas oublier de", "n'oublie pas de"
+  ],
+  "titleReductionRules": [
+    {"pattern": "^aller\\s+(?:à\\s+la\\s+|à\\s+l['’]|au\\s+|aux\\s+|chez\\s+|à\\s+|en\\s+)(.+)$", "template": "$1"}
+  ],
+  "sttPatterns": [],
+  "ambiguityRules": {}
+}

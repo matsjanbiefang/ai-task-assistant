@@ -1,0 +1,90 @@
+{
+  "code": "en",
+  "dateRules": {
+    "weekdayNames": {},
+    "todayWords": [],
+    "tomorrowWords": [],
+    "dayAfterTomorrowWords": [],
+    "numberWords": {"a": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10},
+    "inDaysPattern": "\\bin\\s+(\\d+|a|one|two|three|four|five|six|seven|eight|nine|ten)\\s+days?\\b",
+    "inWeeksPattern": "\\bin\\s+(\\d+|a|one|two|three|four|five|six|seven|eight|nine|ten)\\s+weeks?\\b",
+    "weekdayPhraseRules": [],
+    "nextWeekPattern": "\\bnext week\\b"
+  },
+  "timeWords": {
+    "timePattern": null,
+    "timeOfDayWords": {"noon": "12:00", "midday": "12:00"},
+    "vagueTimeOfDayWords": {
+      "tomorrow morning": "Morning", "tomorrow afternoon": "Afternoon",
+      "tomorrow evening": "Evening", "tomorrow night": "Night",
+      "this morning": "Morning", "this afternoon": "Afternoon", "this evening": "Evening",
+      "tonight": "Night"
+    },
+    "laterOffsetWords": ["later"]
+  },
+  "priorityKeywords": [
+    {"pattern": "^(urgent|asap|important)\\b[:\\-–—]?\\s*", "priority": "high"},
+    {"pattern": "^(high priority)\\b[:\\-–—]?\\s*", "priority": "high"},
+    {"pattern": "^(low priority|whenever)\\b[:\\-–—]?\\s*", "priority": "low"}
+  ],
+  "conjunctions": ["and"],
+  "splitClassifiers": ["then"],
+  "actionVerbs": {
+    "imperativeVerbs": [
+      "call", "buy", "finish", "deploy", "write", "prepare", "book", "pay", "clean", "reply",
+      "send", "schedule", "review", "fix", "renew", "cancel", "water", "tidy", "return", "pick",
+      "think", "do", "get", "make", "take", "bring", "check", "confirm", "submit", "order",
+      "drop", "pack", "email", "text", "message", "update", "install", "download", "upload",
+      "inform", "adjust", "notify", "tell", "ask", "arrange",
+      "need", "want", "have", "should", "must", "plan"
+    ],
+    "verbSuffixes": []
+  },
+  "categoryKeywords": {
+    "work": ["work", "meeting", "deadline", "project", "client", "office", "kickoff"],
+    "health": ["doctor", "dentist", "gym", "workout", "appointment", "fitness", "membership", "hospital"],
+    "shopping": ["buy", "groceries", "shopping", "store"],
+    "finance": ["pay", "bill", "invoice", "bank", "tax"]
+  },
+  "locationPatterns": {
+    "placeKeywords": {
+      "hospital": "Hospital", "doctor": "Doctor", "dentist": "Dentist", "office": "Office",
+      "school": "School", "university": "University", "supermarket": "Supermarket",
+      "pharmacy": "Pharmacy", "bank": "Bank", "gym": "Gym", "station": "Station",
+      "airport": "Airport", "hairdresser": "Hairdresser", "garage": "Garage",
+      "kindergarten": "Kindergarten", "post office": "Post office", "bakery": "Bakery",
+      "restaurant": "Restaurant", "church": "Church", "library": "Library",
+      "town hall": "Town hall", "hardware store": "Hardware store"
+    },
+    "addressPattern": "\\b(?:at|on|in)\\s+([a-z0-9]+(?:\\s+[a-z0-9]+){0,3}\\s+(?:street|st|avenue|ave|road|rd|lane|drive|boulevard|square|plaza|way|court|circle))\\b"
+  },
+  "detailClauseMarkers": {
+    "detailPatterns": [
+      "^take\\s+.+\\s+with\\s+(?:me|us)$",
+      "^take\\s+(?:my|your|our)\\s+.+$",
+      "^(?:bring|pack|grab)\\s+.+$",
+      "^remember\\s+.+$",
+      "^keep\\s+in\\s+mind\\s+.+$",
+      "^don'?t\\s+forget\\s+(?!to\\s).+$"
+    ],
+    "detailContinuationPrefixes": ["with", "for", "about", "plus"],
+    "referentialMarkers": ["with me", "with us"]
+  },
+  "stopwords": {
+    "words": ["oh and", "and also", "also", "please", "btw"],
+    "connectorWords": ["on", "at", "by", "for", "this", "next", "am"]
+  },
+  "fillerPhrases": [
+    "i need to", "i have to", "i must", "i should", "i want to", "i would like to",
+    "i wanna", "i gotta", "i'd like to", "i think i need to", "i really need to",
+    "we need to", "we have to", "we should", "need to", "have to", "gotta",
+    "remember to", "don't forget to", "dont forget to", "make sure to", "make sure i",
+    "note to self", "todo", "to-do", "maybe i should", "should probably"
+  ],
+  "titleReductionRules": [
+    {"pattern": "^(?:go|going|drive|head|walk|run|get)\\s+(?:to|into)\\s+(?:the\\s+|a\\s+|an\\s+)?(.+)$", "template": "$1"},
+    {"pattern": "^(?:doctor'?s?\\s+)?appointment\\s+(?:at|with)\\s+(?:the\\s+)?(.+)$", "template": "Appointment: $1"}
+  ],
+  "sttPatterns": [],
+  "ambiguityRules": {}
+}

@@ -1,0 +1,80 @@
+{
+  "code": "de",
+  "dateRules": {
+    "weekdayNames": {"sonntag": 1, "montag": 2, "dienstag": 3, "mittwoch": 4, "donnerstag": 5, "freitag": 6, "samstag": 7, "sonnabend": 7},
+    "todayWords": ["heute"],
+    "tomorrowWords": ["morgen"],
+    "dayAfterTomorrowWords": ["übermorgen"],
+    "numberWords": {},
+    "inDaysPattern": "\\bin\\s+(\\d+)\\s+tagen\\b",
+    "inWeeksPattern": "\\bin\\s+(\\d+)\\s+wochen\\b",
+    "weekdayPhraseRules": [
+      {"pattern": "\\b(?:nächsten|nächste|kommenden|kommende)\\s+(sonntag|montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntabend)\\b", "skipToday": true, "confidence": 0.85},
+      {"pattern": "\\b(?:diesen|diese)\\s+(sonntag|montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonnabend)\\b", "skipToday": false, "confidence": 0.85},
+      {"pattern": "\\b(sonntag|montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonnabend)\\b", "skipToday": false, "confidence": 0.6}
+    ],
+    "nextWeekPattern": "\\bnächste\\s+woche\\b"
+  },
+  "timeWords": {
+    "timePattern": "\\b(?:um\\s+)?(\\d{1,2})(?:[:.](\\d{2}))?\\s*uhr\\b",
+    "timeOfDayWords": {"mittags": "12:00"},
+    "vagueTimeOfDayWords": {"morgens": "Morgens", "vormittags": "Vormittags", "nachmittags": "Nachmittags", "abends": "Abends", "nachts": "Nachts"},
+    "laterOffsetWords": ["später"]
+  },
+  "priorityKeywords": [
+    {"pattern": "^(dringend|wichtig)\\b[:\\-–—]?\\s*", "priority": "high"},
+    {"pattern": "^(hohe priorität)\\b[:\\-–—]?\\s*", "priority": "high"},
+    {"pattern": "^(niedrige priorität)\\b[:\\-–—]?\\s*", "priority": "low"}
+  ],
+  "conjunctions": ["und"],
+  "splitClassifiers": ["dann"],
+  "actionVerbs": {
+    "imperativeVerbs": [],
+    "verbSuffixes": ["en"]
+  },
+  "categoryKeywords": {
+    "work": ["büro", "arbeit", "projekt", "kickoff"],
+    "health": ["arzt", "arzttermin", "arztbesuch", "hausarzt", "frauenarzt", "zahnarzt", "termin", "fitness", "krankenhaus"],
+    "shopping": ["kaufen", "einkaufen"],
+    "finance": ["rechnung", "bezahlen", "steuer"]
+  },
+  "locationPatterns": {
+    "placeKeywords": {
+      "krankenhaus": "Krankenhaus", "klinik": "Klinik", "arzt": "Arzt", "zahnarzt": "Zahnarzt",
+      "praxis": "Praxis", "büro": "Büro", "schule": "Schule", "universität": "Universität",
+      "uni": "Uni", "supermarkt": "Supermarkt", "apotheke": "Apotheke", "bank": "Bank",
+      "fitnessstudio": "Fitnessstudio", "bahnhof": "Bahnhof", "flughafen": "Flughafen",
+      "baumarkt": "Baumarkt", "friseur": "Friseur", "werkstatt": "Werkstatt", "kita": "Kita",
+      "post": "Post", "bäcker": "Bäcker", "restaurant": "Restaurant", "kirche": "Kirche",
+      "bibliothek": "Bibliothek", "rathaus": "Rathaus"
+    },
+    "addressPattern": "\\b(?:in der|an der|bei der|in|an|bei)\\s+([\\wäöüß]+(?:straße|strasse|allee|weg|platz|gasse))\\b"
+  },
+  "detailClauseMarkers": {
+    "detailPatterns": [
+      "^(?:muss\\s+|noch\\s+)?an\\s+.+\\s+denken$",
+      "^.+\\s+(?:mitnehmen|mitbringen|einpacken|dabeihaben)$",
+      "^.+\\s+dabei\\s+haben$",
+      "^.+\\s+nicht\\s+vergessen$",
+      "^.+\\s+erwähnen$"
+    ],
+    "detailContinuationPrefixes": ["an", "mit", "für", "wegen", "dazu", "außerdem"],
+    "referentialMarkers": ["mit mir", "mit uns", "dabei"]
+  },
+  "stopwords": {
+    "words": ["bitte", "unbedingt", "noch", "mal", "auch noch", "ach ja", "übrigens", "nicht vergessen", "nich vergessen"],
+    "connectorWords": ["am", "um", "den", "der", "die", "das", "für", "zu", "zur"]
+  },
+  "fillerPhrases": [
+    "ich muss noch", "ich muss unbedingt", "ich muss mal", "ich muss", "ich müsste",
+    "ich sollte", "ich soll", "ich will", "ich möchte", "wir müssen", "wir sollten",
+    "man muss", "muss ich", "sollte ich", "muss", "denk daran", "daran denken",
+    "dran denken", "nicht vergessen", "nich vergessen", "ich darf nicht vergessen"
+  ],
+  "titleReductionRules": [
+    {"pattern": "^(?:geh(?:e|en)?\\s+|fahr(?:e|en)?\\s+|lauf(?:e|en)?\\s+)?(?:zum|zur|zu|ins|in\\s+die|in\\s+den|nach|auf\\s+die|aufs)\\s+(.+?)(?:\\s+(?:gehen|fahren|laufen))?$", "template": "$1"},
+    {"pattern": "^termin\\s+(?:beim|bei\\s+der|bei|mit|im|in\\s+der)\\s+(.+)$", "template": "Termin $1"}
+  ],
+  "sttPatterns": [],
+  "ambiguityRules": {}
+}
