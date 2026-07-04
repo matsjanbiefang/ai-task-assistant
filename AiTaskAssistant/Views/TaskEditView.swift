@@ -260,6 +260,9 @@ struct TaskEditView: View {
 
     // MARK: - Field editor sheets
 
+    // Real-device feedback (2026-07-04): "don't do this swipe thing [toolbar Done button],
+    // only swipe down" — every sheet in the app dismisses by swipe only now. Saving moves to
+    // `onDisappear`, which fires for a swipe dismissal exactly the same as any other.
     @ViewBuilder
     private func editorSheet(for field: EditingField) -> some View {
         NavigationStack {
@@ -274,17 +277,10 @@ struct TaskEditView: View {
             }
             .navigationTitle(titleForField(field))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        try? modelContext.save()
-                        editingField = nil
-                    }
-                    .foregroundStyle(Theme.Color.ink)
-                }
-            }
         }
         .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
+        .onDisappear { try? modelContext.save() }
     }
 
     private func titleForField(_ field: EditingField) -> String {
@@ -297,33 +293,41 @@ struct TaskEditView: View {
         }
     }
 
+    // Real-device feedback (2026-07-04): the previous "Has due date"/"Has end date" toggle pair
+    // could end up both ON with the SAME day (toggling "Has end date" always defaulted it to
+    // `dueDate`), rendering a nonsensical "Saturday, 4. Jul – 4. Jul" range in the field row for
+    // a task nobody asked to have a range. Presence is now driven directly by whether the
+    // optional itself is nil — an explicit "Add end date" button is the only way to create one,
+    // and "Remove" is the only way to clear it back to empty.
     @ViewBuilder
     private var dateEditor: some View {
         Section {
-            // Pickers only appear once their toggle is on. Showing a DatePicker bound to
-            // `task.dueDate ?? .now` unconditionally displayed the actual current wall-clock time
-            // as a misleading fallback whenever it was genuinely nil.
-            Toggle("Has due date", isOn: Binding(
-                get: { task.dueDate != nil },
-                set: { if !$0 { task.dueDate = nil } else { task.dueDate = .now } }
-            ))
-            if task.dueDate != nil {
+            if let due = task.dueDate {
                 DatePicker("Due date", selection: Binding(
-                    get: { task.dueDate ?? .now },
+                    get: { due },
                     set: { task.dueDate = $0 }
                 ), displayedComponents: .date)
+                Button("Remove date", role: .destructive) {
+                    task.dueDate = nil
+                    task.dueEndDate = nil
+                }
+            } else {
+                Button("Add date") { task.dueDate = .now }
             }
-            // Real-device feedback (2026-07-03): "business trip to Hamburg from Thursday to
-            // Saturday" — same toggle/picker shape as "Has due date" above.
-            Toggle("Has end date", isOn: Binding(
-                get: { task.dueEndDate != nil },
-                set: { if !$0 { task.dueEndDate = nil } else { task.dueEndDate = task.dueDate ?? .now } }
-            ))
-            if task.dueEndDate != nil {
-                DatePicker("End date", selection: Binding(
-                    get: { task.dueEndDate ?? .now },
-                    set: { task.dueEndDate = $0 }
-                ), displayedComponents: .date)
+        }
+        // Real-device feedback (2026-07-03): "business trip to Hamburg from Thursday to
+        // Saturday" — an end date only makes sense once there's a start date.
+        if task.dueDate != nil {
+            Section {
+                if let end = task.dueEndDate {
+                    DatePicker("End date", selection: Binding(
+                        get: { end },
+                        set: { task.dueEndDate = $0 }
+                    ), displayedComponents: .date)
+                    Button("Remove end date", role: .destructive) { task.dueEndDate = nil }
+                } else {
+                    Button("Add end date") { task.dueEndDate = task.dueDate }
+                }
             }
         }
     }
@@ -331,33 +335,38 @@ struct TaskEditView: View {
     @ViewBuilder
     private var timeEditor: some View {
         Section {
-            Toggle("Has due time", isOn: Binding(
-                get: { task.dueTime != nil },
-                set: { if !$0 { task.dueTime = nil } else { task.dueTime = .now } }
-            ))
-            if task.dueTime != nil {
+            if let due = task.dueTime {
                 DatePicker("Due time", selection: Binding(
-                    get: { task.dueTime ?? .now },
+                    get: { due },
                     set: { task.dueTime = $0 }
                 ), displayedComponents: .hourAndMinute)
-            }
-            // Real-device feedback (2026-07-04): "Arzttermin 10 bis 12 Uhr" — same toggle/picker
-            // shape as "Has due time" above.
-            Toggle("Has end time", isOn: Binding(
-                get: { task.dueEndTime != nil },
-                set: { if !$0 { task.dueEndTime = nil } else { task.dueEndTime = task.dueTime ?? .now } }
-            ))
-            if task.dueEndTime != nil {
-                DatePicker("End time", selection: Binding(
-                    get: { task.dueEndTime ?? .now },
-                    set: { task.dueEndTime = $0 }
-                ), displayedComponents: .hourAndMinute)
+                Button("Remove time", role: .destructive) {
+                    task.dueTime = nil
+                    task.dueEndTime = nil
+                }
+            } else {
+                Button("Add time") { task.dueTime = .now }
             }
             if let timeOfDay = task.timeOfDay {
                 HStack {
                     Text("Time of day")
                     Spacer()
                     Text(timeOfDay).foregroundStyle(Theme.Color.mutedGrey)
+                }
+            }
+        }
+        // Real-device feedback (2026-07-04): "Arzttermin 10 bis 12 Uhr" — an end time only makes
+        // sense once there's a start time.
+        if task.dueTime != nil {
+            Section {
+                if let end = task.dueEndTime {
+                    DatePicker("End time", selection: Binding(
+                        get: { end },
+                        set: { task.dueEndTime = $0 }
+                    ), displayedComponents: .hourAndMinute)
+                    Button("Remove end time", role: .destructive) { task.dueEndTime = nil }
+                } else {
+                    Button("Add end time") { task.dueEndTime = task.dueTime }
                 }
             }
         }

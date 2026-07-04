@@ -6,7 +6,6 @@ import SwiftData
 // it, it becomes a structured item) rather than being a bolted-on separate feature."
 struct ShoppingListView: View {
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.dismiss) private var dismiss
     @Query(sort: \ShoppingItem.order) private var items: [ShoppingItem]
     @State private var composeText = ""
     @FocusState private var composeFocused: Bool
@@ -48,12 +47,6 @@ struct ShoppingListView: View {
             .background(Theme.Color.paper)
             .navigationTitle("Shopping list")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                        .foregroundStyle(Theme.Color.ink)
-                }
-            }
             .onAppear { composeFocused = true }
         }
     }
