@@ -375,3 +375,15 @@ from `IMPLEMENTATION-LOG.md`'s "Next actions" before considering Milestone 1 tru
       `timeRangePattern` per-language field (German only, same "populate only where verified"
       precedent as RDF-2/RDF-4), tried before the plain single-time matchers. Week's card and the
       new Detail screen both render a range as "10:00–12:00".
+- [x] **RDF-10** (confirmed working on-device via screenshots) Detail screen's field rows showed
+      an "Add" placeholder when empty — read as filled-in content at a glance. Changed to a blank
+      value (still tappable, still styled muted) so an empty field is unambiguous.
+- [x] **RDF-11** New **Tasklist** module: undated tasks no longer show inside Week (removed the
+      dashed "No date" section entirely — Week is now the calendar, dated tasks only). They live
+      in `TasklistView` instead, reachable from Notebook's top bar (new `list.bullet` icon
+      alongside calendar/cart). No explicit "move" mechanism exists or is needed — `TaskItem.
+      dueDate` is the single filter both screens key off, so adding/clearing a date in
+      `TaskEditView` makes a task disappear from one screen and appear in the other automatically.
+      Extracted the shared card UI (`TaskCardView`) and empty-state UI (`EmptyStateView`) out of
+      `WeekView` into their own file so Week and Tasklist render tasks identically without
+      duplicating ~80 lines of layout code.

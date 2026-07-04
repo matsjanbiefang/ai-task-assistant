@@ -43,7 +43,7 @@ struct TaskEditView: View {
                 ) { editingField = .time }
                 fieldRow(
                     label: "Place",
-                    value: task.place ?? "Add",
+                    value: task.place ?? "",
                     isPlaceholder: task.place == nil
                 ) { editingField = .place }
                 categoryFieldRow
@@ -228,7 +228,7 @@ struct TaskEditView: View {
                     .font(Theme.Typography.body(15))
                     .foregroundStyle(Theme.Color.mutedGrey)
                 Spacer()
-                Text(task.category.map(Theme.categoryLabel) ?? "Add")
+                Text(task.category.map(Theme.categoryLabel) ?? "")
                     .font(Theme.Typography.body(16, weight: .semibold))
                     .foregroundStyle(task.category == nil ? Theme.Color.mutedGrey : Theme.Color.ink)
             }
@@ -239,8 +239,11 @@ struct TaskEditView: View {
         .buttonStyle(.plain)
     }
 
+    // Real-device feedback (2026-07-04): an explicit "Add" placeholder read as filled-in
+    // content at a glance — an empty value (still a tappable row, per `isPlaceholder`'s muted
+    // styling) reads unambiguously as "nothing here yet".
     private var dateRowValue: String {
-        guard let date = task.dueDate else { return "Add" }
+        guard let date = task.dueDate else { return "" }
         let start = date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())
         guard let end = task.dueEndDate else { return start }
         return "\(start) – \(end.formatted(.dateTime.month(.abbreviated).day()))"
@@ -248,7 +251,7 @@ struct TaskEditView: View {
 
     private var timeRowValue: String {
         guard let time = task.dueTime else {
-            return task.timeOfDay ?? "Add"
+            return task.timeOfDay ?? ""
         }
         let start = time.formatted(.dateTime.hour().minute())
         guard let end = task.dueEndTime else { return start }

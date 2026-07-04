@@ -29,6 +29,7 @@ struct NoteView: View {
     @State private var weekFilter: WeekFilter?
     @State private var showShoppingList = false
     @State private var showSettings = false
+    @State private var showTasklist = false
     @FocusState private var focusedTarget: FocusTarget?
 
     private let extraction = RuleBasedExtractionService.shared
@@ -147,6 +148,11 @@ struct NoteView: View {
         }
         .sheet(isPresented: $showShoppingList) {
             ShoppingListView()
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showTasklist) {
+            TasklistView()
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
@@ -347,9 +353,11 @@ struct NoteView: View {
 
     // §6 Notebook: "Top bar: calendar and shopping-list icons grouped in the center,
     // settings top-right, nothing else (no date label; the content below makes the date obvious
-    // enough)." Fixed header, NOT inside the ScrollView — a sibling of it in the root VStack, so
-    // the note content's own top edge can never visually end up "behind" the system status
-    // bar/notch the way it could when the ScrollView's content was allowed to scroll to y=0.
+    // enough)." A third icon (Tasklist, real-device feedback 2026-07-04) joined the center group
+    // once undated tasks got their own module instead of a section inside Week. Fixed header, NOT
+    // inside the ScrollView — a sibling of it in the root VStack, so the note content's own top
+    // edge can never visually end up "behind" the system status bar/notch the way it could when
+    // the ScrollView's content was allowed to scroll to y=0.
     private var topBar: some View {
         ZStack {
             HStack(spacing: 32) {
@@ -365,6 +373,15 @@ struct NoteView: View {
                     showShoppingList = true
                 } label: {
                     Image(systemName: "cart")
+                        .font(.title3)
+                        .foregroundStyle(Theme.Color.mutedGrey)
+                }
+                // Real-device feedback (2026-07-04): undated tasks no longer show in Week — this
+                // is where they live instead.
+                Button {
+                    showTasklist = true
+                } label: {
+                    Image(systemName: "list.bullet")
                         .font(.title3)
                         .foregroundStyle(Theme.Color.mutedGrey)
                 }
