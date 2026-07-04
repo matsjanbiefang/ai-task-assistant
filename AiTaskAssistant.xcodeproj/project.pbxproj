@@ -45,6 +45,8 @@
 		A1000039 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000043 /* SettingsView.swift */; };
 		A1000040 /* BricolageGrotesque.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A2000044 /* BricolageGrotesque.ttf */; };
 		A1000041 /* Outfit.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A2000045 /* Outfit.ttf */; };
+		A1000042 /* TaskCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000046 /* TaskCardView.swift */; };
+		A1000043 /* TasklistView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000047 /* TasklistView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -89,6 +91,8 @@
 		A2000043 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		A2000044 /* BricolageGrotesque.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = BricolageGrotesque.ttf; sourceTree = "<group>"; };
 		A2000045 /* Outfit.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Outfit.ttf; sourceTree = "<group>"; };
+		A2000046 /* TaskCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskCardView.swift; sourceTree = "<group>"; };
+		A2000047 /* TasklistView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasklistView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -175,6 +179,8 @@
 				A2000024 /* OnboardingLanguageView.swift */,
 				A2000042 /* ShoppingListView.swift */,
 				A2000043 /* SettingsView.swift */,
+				A2000046 /* TaskCardView.swift */,
+				A2000047 /* TasklistView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -367,6 +373,8 @@
 				A1000037 /* ShoppingItem.swift in Sources */,
 				A1000038 /* ShoppingListView.swift in Sources */,
 				A1000039 /* SettingsView.swift in Sources */,
+				A1000042 /* TaskCardView.swift in Sources */,
+				A1000043 /* TasklistView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
