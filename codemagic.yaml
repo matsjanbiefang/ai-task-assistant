@@ -48,11 +48,23 @@ workflows:
     publishing:
       app_store_connect:
         auth: integration
-        submit_to_testflight: true
+        # Real-device feedback (2026-07-04): explicitly internal-only distribution. Every build
+        # from 12-14 uploaded and finished App Store Connect processing successfully, but then
+        # failed at "Submit build to TestFlight beta review" — that step is Apple's EXTERNAL
+        # tester review gate (requires Beta App Review Information: name/phone/email on the
+        # account), and has nothing to do with internal testers. Internal testers with
+        # "Automatic" distribution (the default) already receive every processed build with zero
+        # action here — submit_to_testflight only controls submission to review-requiring
+        # (external) groups, so leaving it false stops CI from erroring out at that step while
+        # changing nothing about internal availability.
+        #
         # Explicit beta_groups was tried for internal-only distribution but Apple's API rejects
         # assigning builds to an internal group set to "Automatic" distribution (the default) —
-        # "Cannot add internal group to a build". Automatic distribution means every processed
-        # build already reaches internal testers with zero action needed here, so no beta_groups
-        # config is required (or usable) for that. A group would need "Manual" distribution
+        # "Cannot add internal group to a build". A group would need "Manual" distribution
         # enabled in App Store Connect before it could ever be targeted explicitly this way.
+        #
+        # To re-enable external testing later: fill in Beta App Review Information at
+        # https://appstoreconnect.apple.com/apps/6786296217/testflight/test-info, then set this
+        # back to true.
+        submit_to_testflight: false
         submit_to_app_store: false
