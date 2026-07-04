@@ -247,7 +247,11 @@ struct WeekView: View {
                 // Real-device feedback (2026-07-03): a range renders as "Jul 9 – Jul 11".
                 Text("\(date.formatted(.dateTime.month(.abbreviated).day())) – \(endDate.formatted(.dateTime.month(.abbreviated).day()))")
             }
-            if let time = task.dueTime {
+            if let time = task.dueTime, let endTime = task.dueEndTime {
+                // Real-device feedback (2026-07-04): "Arzttermin 10 bis 12 Uhr" — a time range
+                // renders as "10:00–12:00", mirroring the date-range rendering above.
+                Text("\(time.formatted(.dateTime.hour().minute())) – \(endTime.formatted(.dateTime.hour().minute()))")
+            } else if let time = task.dueTime {
                 Text(time.formatted(.dateTime.hour().minute()))
             } else if let timeOfDay = task.timeOfDay {
                 Label(timeOfDay, systemImage: "clock")

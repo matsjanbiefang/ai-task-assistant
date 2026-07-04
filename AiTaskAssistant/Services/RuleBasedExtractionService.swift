@@ -15,6 +15,9 @@ struct ExtractedTask: Sendable {
     var title: String
     var dueDate: String?      // ISO 8601 YYYY-MM-DD, local calendar day
     var dueTime: String?      // HH:MM, 24h
+    // Real-device feedback (2026-07-04): "Arzttermin 10 bis 12 Uhr" — set only by timeRangeMatch,
+    // alongside dueTime as the range's start. nil for every task with just a single time.
+    var dueEndTime: String? = nil
     // Real-device feedback (2026-07-03): "business trip to Hamburg from Thursday to Saturday" —
     // set only by dateRangeMatch, alongside dueDate as the range's start. nil for every task with
     // just a single date, which is still the overwhelming majority.
@@ -100,6 +103,12 @@ struct LanguageRules: Sendable {
     let rangeFromWord: String?
     let rangeToWord: String?
     let timePattern: String?                      // capture group 1 = hour, group 2 = optional minute
+    // Real-device feedback (2026-07-04): "Arzttermin 10 bis 12 Uhr" — a time range, tried before
+    // `timePattern` for the same reason `dateRangeMatch` is tried before `customDateMatch`: the
+    // plain single-time pattern would otherwise match just the range's END ("12 Uhr") and silently
+    // drop the start. Four capture groups: hour1, minute1 (optional), hour2, minute2 (optional).
+    // nil except German today — same "populate only where verified" precedent as RDF-2/RDF-4.
+    let timeRangePattern: String?
     let timeOfDayWords: [String: String]           // UNAMBIGUOUS time-of-day word -> fixed "HH:mm" (e.g. German "mittags" -> "12:00")
     // Feedback round 3: "morning"/"evening" etc. span hours, not a single instant — guessing a
     // specific clock time for them was actively wrong (a real-device report: "shopping tomorrow
@@ -157,6 +166,7 @@ struct LanguageRules: Sendable {
         rangeFromWord: String? = nil,
         rangeToWord: String? = nil,
         timePattern: String?,
+        timeRangePattern: String? = nil,
         timeOfDayWords: [String: String],
         vagueTimeOfDayWords: [String: String] = [:],
         laterOffsetWords: [String] = [],
@@ -191,6 +201,7 @@ struct LanguageRules: Sendable {
         self.rangeFromWord = rangeFromWord
         self.rangeToWord = rangeToWord
         self.timePattern = timePattern
+        self.timeRangePattern = timeRangePattern
         self.timeOfDayWords = timeOfDayWords
         self.vagueTimeOfDayWords = vagueTimeOfDayWords
         self.laterOffsetWords = laterOffsetWords
@@ -388,6 +399,7 @@ struct RuleBasedExtractionService: Sendable {
         var dueDate: String?
         var dueEndDate: String?
         var dueTime: String?
+        var dueEndTime: String?
         var timeOfDay: String?
         var confidence = 1.0
         var rangesToStrip: [Range<String.Index>] = []
@@ -434,6 +446,18 @@ struct RuleBasedExtractionService: Sendable {
             dateFound = true
         }
 
+        // Real-device feedback (2026-07-04): "Arzttermin 10 bis 12 Uhr" — tried before the plain
+        // single-time matchers below so a range wins over them accidentally grabbing just its end
+        // ("12 Uhr"), the same precedent as dateRangeMatch above.
+        if dueTime == nil {
+            for rules in rulesList {
+                guard let match = timeRangeMatch(in: text, rules: rules) else { continue }
+                dueTime = match.startTime
+                dueEndTime = match.endTime
+                rangesToStrip.append(match.range)
+                break
+            }
+        }
         if dueTime == nil {
             for rules in rulesList {
                 guard let timeMatch = anyTimeMatch(in: text, rules: rules) else { continue }
@@ -480,6 +504,7 @@ struct RuleBasedExtractionService: Sendable {
             title: title,
             dueDate: dueDate,
             dueTime: dueTime,
+            dueEndTime: dueEndTime,
             dueEndDate: dueEndDate,
             priority: priority,
             category: category,
@@ -849,6 +874,12 @@ struct RuleBasedExtractionService: Sendable {
         let confidence: Double
     }
 
+    private struct TimeRangeMatch {
+        let range: Range<String.Index>
+        let startTime: String
+        let endTime: String
+    }
+
     // Real-device feedback (2026-07-03): "business trip to Hamburg from Thursday to Saturday" —
     // scoped to weekday-name ranges only (matches the reported case), reusing weekdayNames and
     // nextOccurrence exactly as weekdayPhraseRules resolution does below. Requires "from" directly
@@ -874,6 +905,31 @@ struct RuleBasedExtractionService: Sendable {
         var end = nextOccurrence(of: weekday2, from: today, calendar: calendar, skipToday: false)
         if end < start { end = calendar.date(byAdding: .day, value: 7, to: end)! }
         return DateRangeMatch(range: range, startDate: start, endDate: end, confidence: 0.85)
+    }
+
+    // Real-device feedback (2026-07-04): "Arzttermin 10 bis 12 Uhr" — a time range, matched
+    // exactly like `dateRangeMatch` above (tried before the plain single-time patterns so a range
+    // wins over them accidentally grabbing just its end). Four capture groups: hour1, minute1
+    // (optional), hour2, minute2 (optional). nil except German today.
+    private func timeRangeMatch(in text: String, rules: LanguageRules) -> TimeRangeMatch? {
+        guard let pattern = rules.timeRangePattern,
+              let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+              let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+              let range = Range(match.range, in: text) else { return nil }
+        let ns = text as NSString
+        let hour1 = Int(ns.substring(with: match.range(at: 1))) ?? 0
+        var minute1 = 0
+        if match.range(at: 2).location != NSNotFound {
+            minute1 = Int(ns.substring(with: match.range(at: 2))) ?? 0
+        }
+        let hour2 = Int(ns.substring(with: match.range(at: 3))) ?? 0
+        var minute2 = 0
+        if match.range(at: 4).location != NSNotFound {
+            minute2 = Int(ns.substring(with: match.range(at: 4))) ?? 0
+        }
+        let startTime = String(format: "%02d:%02d", hour1, minute1)
+        let endTime = String(format: "%02d:%02d", hour2, minute2)
+        return TimeRangeMatch(range: range, startTime: startTime, endTime: endTime)
     }
 
     // Feedback round 3: "later"/"später" resolves to a computed, specific answer (now + 6h) per
@@ -1060,6 +1116,7 @@ struct RuleBasedExtractionService: Sendable {
             let weekdayAlt = rules.weekdayNames.keys.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
             patterns.append("\\b\(NSRegularExpression.escapedPattern(for: fromWord))\\s+(\(weekdayAlt))\\s+\(NSRegularExpression.escapedPattern(for: toWord))\\s+(\(weekdayAlt))\\b")
         }
+        if let pattern = rules.timeRangePattern { patterns.append(pattern) }
         if let pattern = rules.timePattern { patterns.append(pattern) }
         if let alt = wordAlternation(Array(rules.timeOfDayWords.keys)) { patterns.append("\\b(\(alt))\\b") }
         if let alt = wordAlternation(Array(rules.vagueTimeOfDayWords.keys)) { patterns.append("\\b(\(alt))\\b") }

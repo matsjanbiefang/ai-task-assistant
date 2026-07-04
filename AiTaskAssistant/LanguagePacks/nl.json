@@ -17,6 +17,7 @@
   },
   "timeWords": {
     "timePattern": "\\bom\\s+(\\d{1,2})(?:[:.](\\d{2}))?\\s*uur\\b",
+    "timeRangePattern": null,
     "timeOfDayWords": {},
     "vagueTimeOfDayWords": {"ochtend": "Ochtend", "middag": "Middag", "namiddag": "Namiddag", "avond": "Avond", "nacht": "Nacht"},
     "laterOffsetWords": ["later"]

@@ -15,6 +15,10 @@ final class TaskItem {
     var title: String
     var dueDate: Date?
     var dueTime: Date?
+    // Real-device feedback (2026-07-04): "Arzttermin 10 bis 12 Uhr" — set only alongside dueTime
+    // when RuleBasedExtractionService's timeRangeMatch fires. nil for the overwhelming majority
+    // of tasks, which have at most a single time.
+    var dueEndTime: Date?
     // Real-device feedback (2026-07-03): "business trip to Hamburg from Thursday to Saturday" —
     // set only alongside dueDate when RuleBasedExtractionService's dateRangeMatch fires. nil for
     // the overwhelming majority of tasks, which have just a single date.
@@ -47,6 +51,7 @@ final class TaskItem {
         title: String,
         dueDate: Date? = nil,
         dueTime: Date? = nil,
+        dueEndTime: Date? = nil,
         dueEndDate: Date? = nil,
         priority: String? = nil,
         category: String? = nil,
@@ -62,6 +67,7 @@ final class TaskItem {
         self.title = title
         self.dueDate = dueDate
         self.dueTime = dueTime
+        self.dueEndTime = dueEndTime
         self.dueEndDate = dueEndDate
         self.priority = priority
         self.category = category
