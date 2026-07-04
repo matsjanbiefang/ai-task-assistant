@@ -72,6 +72,7 @@ struct WeekView: View {
             }
             .sheet(item: $editingTask) { task in
                 TaskEditView(task: task)
+                    .presentationDragIndicator(.visible)
             }
             .onAppear { activeFilter = initialFilter }
             .onChange(of: initialFilter) { _, new in activeFilter = new }

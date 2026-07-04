@@ -9,7 +9,6 @@ import SwiftData
 // clearing one) makes it disappear from here and appear in Week (or vice versa) automatically.
 struct TasklistView: View {
     @Query(sort: \TaskItem.createdAt, order: .reverse) private var allTasks: [TaskItem]
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @State private var editingTask: TaskItem?
 
@@ -41,14 +40,9 @@ struct TasklistView: View {
             .background(Theme.Color.paper)
             .navigationTitle("Tasklist")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                        .foregroundStyle(Theme.Color.ink)
-                }
-            }
             .sheet(item: $editingTask) { task in
                 TaskEditView(task: task)
+                    .presentationDragIndicator(.visible)
             }
         }
     }

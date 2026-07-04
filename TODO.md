@@ -387,3 +387,35 @@ from `IMPLEMENTATION-LOG.md`'s "Next actions" before considering Milestone 1 tru
       Extracted the shared card UI (`TaskCardView`) and empty-state UI (`EmptyStateView`) out of
       `WeekView` into their own file so Week and Tasklist render tasks identically without
       duplicating ~80 lines of layout code.
+
+## Real-device feedback (2026-07-04, round 4) — no more toggles/Done buttons, Settings grows up
+
+- [x] **RDF-12** The Date editor's "Has due date"/"Has end date" toggle pair could end up both ON
+      with the SAME day — toggling "Has end date" always defaulted it to `dueDate` — rendering a
+      nonsensical "Saturday, 4. Jul – 4. Jul" range for a task nobody asked to have a range.
+      Replaced both the date and time editors' toggle+picker pairs with direct add/remove: a
+      DatePicker only appears once the optional is actually set, "Add date"/"Add end date" (or
+      time) creates it explicitly, "Remove" clears it. No more accidental same-day ranges.
+- [x] **RDF-13** "Delete the done button, only swipe down" — every sheet's toolbar "Done" button
+      is gone (TaskEditView's field-editor sub-sheets, ShoppingListView, TasklistView). Saving
+      moved to `onDisappear`, which fires identically whether the sheet closes via swipe or any
+      other means, so nothing was lost by removing the explicit save trigger.
+- [x] **RDF-14** "Why is the shopping list first small and then full screen, and the other things
+      not? Make all full screen when open" — Week/ShoppingList opened at `.medium` (resizable to
+      `.large`) while Tasklist/Settings opened straight at full size. Removed `presentationDetents`
+      from every Notebook-launched sheet so they all open full size immediately, matching what
+      Settings already did.
+- [x] **RDF-15** "Reduce note-taking language to the supported languages" — `SupportedLanguage`
+      lists all 24 EU languages (a deliberate future-extensibility list), but only 8 have a real
+      `LanguageRules` pack. Added `SupportedLanguage.isSupportedByLanguagePack` and filtered both
+      the onboarding language picker and Settings' language list down to those 8; the enum itself
+      is untouched so adding a 9th pack later is still just adding one more `LanguageRules` table.
+- [x] **RDF-16** Settings grew four new sections: **Reminders** (on/off toggle + a "Remind me"
+      lead-time picker with presets — at due time / 15 min / 1 hour / 1 day — plus a "Custom…"
+      option for any whole number of minutes/hours/days), **About** (placeholder Terms of Service
+      and Privacy Policy screens, plus a Support mailto link at a placeholder address pending a
+      real support inbox), and **Delete all data** (destructive, confirmation-gated, clears every
+      task/note/shopping item and cancels all pending notifications). `NotificationService.
+      schedule` now reads the enabled flag and lead time itself from `UserDefaults` and computes
+      the actual fire time as `dueDate - leadTime`, so every call site stays as simple as "here's
+      when this is due" — no threading the setting through every scheduling call.

@@ -141,28 +141,31 @@ struct NoteView: View {
                 Task { await commitDictatedText() }
             }
         }
+        // Real-device feedback (2026-07-04): Week/Shopping list opened at .medium (resizable to
+        // .large) while Tasklist/Settings opened straight at full size — inconsistent for no
+        // reason. Every sheet from Notebook now opens full size immediately; swipe down is the
+        // only dismissal (no toolbar "Done" anywhere in the app).
         .sheet(isPresented: $showTasks) {
             WeekView(initialFilter: weekFilter)
-                .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showShoppingList) {
             ShoppingListView()
-                .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showTasklist) {
             TasklistView()
-                .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showSettings) {
             SettingsView()
+                .presentationDragIndicator(.visible)
         }
         // Feedback round 3: tapping a single-task line's indicator opens that task's editor
         // directly — no task list in between.
         .sheet(item: $editTask) { task in
             TaskEditView(task: task)
+                .presentationDragIndicator(.visible)
         }
     }
 

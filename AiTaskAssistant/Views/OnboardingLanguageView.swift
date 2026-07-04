@@ -7,10 +7,17 @@ import SwiftUI
 struct OnboardingLanguageView: View {
     var onSelect: (SupportedLanguage) -> Void
 
-    @State private var selected = SupportedLanguage.deviceDefault
+    // Real-device feedback (2026-07-04): "reduce note taking language to the supported
+    // languages" — `SupportedLanguage` lists all 24 EU languages (a future-extensibility list,
+    // see its own doc comment), but only 8 have a real `LanguageRules` pack today. Showing the
+    // other 16 implied a level of support that doesn't exist yet.
+    @State private var selected = SupportedLanguage.deviceDefault.isSupportedByLanguagePack
+        ? SupportedLanguage.deviceDefault : .en
 
     private var sortedLanguages: [SupportedLanguage] {
-        SupportedLanguage.allCases.sorted { $0.displayName < $1.displayName }
+        SupportedLanguage.allCases
+            .filter(\.isSupportedByLanguagePack)
+            .sorted { $0.displayName < $1.displayName }
     }
 
     var body: some View {

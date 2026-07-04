@@ -23,4 +23,14 @@ enum SupportedLanguage: String, CaseIterable, Identifiable, Sendable {
         }
         return .en
     }
+
+    /// Real-device feedback (2026-07-04): "reduce note taking language to the supported
+    /// languages" — of these 24, only the ones with a real `LanguageRules` pack (see
+    /// `LanguagePackLoader.supportedCodes`) should be offered as a note-taking language choice.
+    /// The other 16 still work via the universal NSDataDetector fallback if somehow selected, but
+    /// showing them in the picker implied per-language date/place/category coverage that isn't
+    /// actually there yet.
+    var isSupportedByLanguagePack: Bool {
+        LanguagePackLoader.supportedCodes.contains(rawValue)
+    }
 }
