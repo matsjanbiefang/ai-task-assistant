@@ -10,7 +10,7 @@
 		A1000001 /* AiTaskAssistantApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001 /* AiTaskAssistantApp.swift */; };
 		A1000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000002 /* ContentView.swift */; };
 		A1000003 /* NoteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000003 /* NoteView.swift */; };
-		A1000004 /* AssistantView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000004 /* AssistantView.swift */; };
+		A1000004 /* WeekView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000004 /* WeekView.swift */; };
 		A1000005 /* TaskItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000005 /* TaskItem.swift */; };
 		A1000006 /* RuleBasedExtractionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000006 /* RuleBasedExtractionService.swift */; };
 		A1000007 /* AddTaskIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000007 /* AddTaskIntent.swift */; };
@@ -39,13 +39,19 @@
 		A1000033 /* EntityMemoryServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000037 /* EntityMemoryServiceTests.swift */; };
 		A1000034 /* FoundationModelsFallback.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000038 /* FoundationModelsFallback.swift */; };
 		A1000035 /* STTNormalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000039 /* STTNormalizationTests.swift */; };
+		A1000036 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000040 /* Theme.swift */; };
+		A1000037 /* ShoppingItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000041 /* ShoppingItem.swift */; };
+		A1000038 /* ShoppingListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000042 /* ShoppingListView.swift */; };
+		A1000039 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000043 /* SettingsView.swift */; };
+		A1000040 /* BricolageGrotesque.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A2000044 /* BricolageGrotesque.ttf */; };
+		A1000041 /* Outfit.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A2000045 /* Outfit.ttf */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		A2000001 /* AiTaskAssistantApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AiTaskAssistantApp.swift; sourceTree = "<group>"; };
 		A2000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		A2000003 /* NoteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteView.swift; sourceTree = "<group>"; };
-		A2000004 /* AssistantView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantView.swift; sourceTree = "<group>"; };
+		A2000004 /* WeekView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeekView.swift; sourceTree = "<group>"; };
 		A2000005 /* TaskItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskItem.swift; sourceTree = "<group>"; };
 		A2000012 /* ExtractionHarnessView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtractionHarnessView.swift; sourceTree = "<group>"; };
 		A2000013 /* TaskEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskEditView.swift; sourceTree = "<group>"; };
@@ -77,6 +83,12 @@
 		A2000037 /* EntityMemoryServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntityMemoryServiceTests.swift; sourceTree = "<group>"; };
 		A2000038 /* FoundationModelsFallback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoundationModelsFallback.swift; sourceTree = "<group>"; };
 		A2000039 /* STTNormalizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STTNormalizationTests.swift; sourceTree = "<group>"; };
+		A2000040 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		A2000041 /* ShoppingItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShoppingItem.swift; sourceTree = "<group>"; };
+		A2000042 /* ShoppingListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShoppingListView.swift; sourceTree = "<group>"; };
+		A2000043 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		A2000044 /* BricolageGrotesque.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = BricolageGrotesque.ttf; sourceTree = "<group>"; };
+		A2000045 /* Outfit.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Outfit.ttf; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -115,6 +127,8 @@
 				A4000008 /* Services */,
 				A4000009 /* Intents */,
 				A4000010 /* LanguagePacks */,
+				A4000011 /* DesignSystem */,
+				A4000012 /* Fonts */,
 				A2000016 /* Assets.xcassets */,
 				A2000009 /* Info.plist */,
 			);
@@ -155,10 +169,12 @@
 			children = (
 				A2000002 /* ContentView.swift */,
 				A2000003 /* NoteView.swift */,
-				A2000004 /* AssistantView.swift */,
+				A2000004 /* WeekView.swift */,
 				A2000012 /* ExtractionHarnessView.swift */,
 				A2000013 /* TaskEditView.swift */,
 				A2000024 /* OnboardingLanguageView.swift */,
+				A2000042 /* ShoppingListView.swift */,
+				A2000043 /* SettingsView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -170,6 +186,7 @@
 				A2000023 /* SupportedLanguage.swift */,
 				A2000025 /* NoteLine.swift */,
 				A2000035 /* EntityMemory.swift */,
+				A2000041 /* ShoppingItem.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -208,6 +225,23 @@
 				A2000034 /* pl.json */,
 			);
 			path = LanguagePacks;
+			sourceTree = "<group>";
+		};
+		A4000011 /* DesignSystem */ = {
+			isa = PBXGroup;
+			children = (
+				A2000040 /* Theme.swift */,
+			);
+			path = DesignSystem;
+			sourceTree = "<group>";
+		};
+		A4000012 /* Fonts */ = {
+			isa = PBXGroup;
+			children = (
+				A2000044 /* BricolageGrotesque.ttf */,
+				A2000045 /* Outfit.ttf */,
+			);
+			path = Fonts;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -299,6 +333,8 @@
 				A1000028 /* pt.json in Resources */,
 				A1000029 /* nl.json in Resources */,
 				A1000030 /* pl.json in Resources */,
+				A1000040 /* BricolageGrotesque.ttf in Resources */,
+				A1000041 /* Outfit.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -312,7 +348,7 @@
 				A1000001 /* AiTaskAssistantApp.swift in Sources */,
 				A1000002 /* ContentView.swift in Sources */,
 				A1000003 /* NoteView.swift in Sources */,
-				A1000004 /* AssistantView.swift in Sources */,
+				A1000004 /* WeekView.swift in Sources */,
 				A1000005 /* TaskItem.swift in Sources */,
 				A1000006 /* RuleBasedExtractionService.swift in Sources */,
 				A1000007 /* AddTaskIntent.swift in Sources */,
@@ -327,6 +363,10 @@
 				A1000031 /* EntityMemory.swift in Sources */,
 				A1000032 /* EntityMemoryService.swift in Sources */,
 				A1000034 /* FoundationModelsFallback.swift in Sources */,
+				A1000036 /* Theme.swift in Sources */,
+				A1000037 /* ShoppingItem.swift in Sources */,
+				A1000038 /* ShoppingListView.swift in Sources */,
+				A1000039 /* SettingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -357,7 +397,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 11;
+				CURRENT_PROJECT_VERSION = 12;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = AiTaskAssistant/Info.plist;
@@ -380,7 +420,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 11;
+				CURRENT_PROJECT_VERSION = 12;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = AiTaskAssistant/Info.plist;
@@ -403,7 +443,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 11;
+				CURRENT_PROJECT_VERSION = 12;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -421,7 +461,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 11;
+				CURRENT_PROJECT_VERSION = 12;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;

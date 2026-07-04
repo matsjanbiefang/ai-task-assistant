@@ -52,6 +52,9 @@
     },
     "addressPattern": null
   },
+  "shoppingList": {
+    "pattern": null
+  },
   "detailClauseMarkers": {
     "detailPatterns": [
       "^(?:levar|trazer)\\s+.+$",

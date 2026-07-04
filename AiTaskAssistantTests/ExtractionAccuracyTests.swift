@@ -458,4 +458,77 @@ struct ExtractionAccuracyTests {
         }
         #expect(task.place == "Bahnhofstraße")
     }
+
+    // Real-device feedback (2026-07-04): "Meeting Rosenstraße" (no "in der"/"an der" preposition)
+    // wasn't recognized as an address at all — the pattern required a leading preposition. It's
+    // now optional, so the street-type-suffix SHAPE alone ("<word>straße") is enough to match.
+    @Test
+    func germanStreetNameWithoutPrepositionBecomesPlace() {
+        let service = RuleBasedExtractionService.shared
+        let tasks = service.extractLine("meeting rosenstraße", referenceDate: corpusToday)
+        guard let task = tasks.first else {
+            Issue.record("expected at least one task")
+            return
+        }
+        #expect(task.place == "Rosenstraße")
+    }
+
+    // Real-device feedback (2026-07-04): "Trip nächste Woche von Dienstag bis Donnerstag" produced
+    // no date range — German's rangeFromWord/rangeToWord ("von"/"bis") were unset, so
+    // dateRangeMatch never ran for German. Mirrors dateRangeAcrossWeekdaysProducesStartAndEndDate
+    // above, computing the expected start/end independently rather than via the code under test.
+    @Test
+    func germanDateRangeAcrossWeekdaysProducesStartAndEndDate() {
+        let service = RuleBasedExtractionService.shared
+        let tasks = service.extractLine("trip nächste woche von dienstag bis donnerstag", referenceDate: corpusToday)
+        guard let task = tasks.first else {
+            Issue.record("expected at least one task")
+            return
+        }
+        let calendar = Calendar.current
+        func nearest(_ weekday: Int) -> Date {
+            let todayWeekday = calendar.component(.weekday, from: corpusToday)
+            let delta = (weekday - todayWeekday + 7) % 7
+            return calendar.date(byAdding: .day, value: delta, to: corpusToday)!
+        }
+        let expectedStart = nearest(3) // Dienstag
+        var expectedEnd = nearest(5)   // Donnerstag
+        if expectedEnd < expectedStart { expectedEnd = calendar.date(byAdding: .day, value: 7, to: expectedEnd)! }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.timeZone = .current
+        #expect(task.dueDate == formatter.string(from: expectedStart))
+        #expect(task.dueEndDate == formatter.string(from: expectedEnd))
+    }
+
+    // MARK: Real-device feedback (2026-07-04) — shopping list cue-phrase detection. Not part of
+    // extractLine's pipeline (NoteView checks this FIRST and routes matches to ShoppingItem
+    // instead), so tested directly against the new `shoppingListItems` entry point.
+
+    @Test
+    func englishShoppingListCuePhraseExtractsItem() {
+        let service = RuleBasedExtractionService.shared
+        let items = service.shoppingListItems(in: "add milk to shopping list", primaryLanguageCode: "en")
+        #expect(items == ["Milk"])
+    }
+
+    @Test
+    func englishShoppingListCuePhraseSplitsConjoinedItems() {
+        let service = RuleBasedExtractionService.shared
+        let items = service.shoppingListItems(in: "add milk and eggs to the shopping list", primaryLanguageCode: "en")
+        #expect(items == ["Milk", "Eggs"])
+    }
+
+    @Test
+    func germanShoppingListCuePhraseExtractsItem() {
+        let service = RuleBasedExtractionService.shared
+        let items = service.shoppingListItems(in: "Milch auf die Einkaufsliste", primaryLanguageCode: "de")
+        #expect(items == ["Milch"])
+    }
+
+    @Test
+    func ordinaryTaskDoesNotMisfireAsShoppingListItem() {
+        let service = RuleBasedExtractionService.shared
+        #expect(service.shoppingListItems(in: "call the dentist tomorrow", primaryLanguageCode: "en") == nil)
+    }
 }

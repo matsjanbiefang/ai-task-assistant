@@ -26,6 +26,9 @@ struct NoteView: View {
     @State private var speech = SpeechRecognizer()
     @State private var editTask: TaskItem?
     @State private var keyboardHeight: CGFloat = 0
+    @State private var weekFilter: WeekFilter?
+    @State private var showShoppingList = false
+    @State private var showSettings = false
     @FocusState private var focusedTarget: FocusTarget?
 
     private let extraction = RuleBasedExtractionService.shared
@@ -38,6 +41,15 @@ struct NoteView: View {
     private var isRecording: Bool { speech.state == .recording }
     private var openTasks: [TaskItem] { allTasks.filter { !$0.isCompleted } }
     private var todayOpenCount: Int { openTasks.filter { isToday($0.dueDate) }.count }
+    // §6 Notebook stat bar: "Woche (this week's dated tasks)".
+    private var weekOpenCount: Int {
+        let calendar = Calendar.current
+        guard let interval = calendar.dateInterval(of: .weekOfYear, for: .now) else { return 0 }
+        return openTasks.filter { task in
+            guard let due = task.dueDate else { return false }
+            return due >= interval.start && due < interval.end
+        }.count
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -50,6 +62,11 @@ struct NoteView: View {
                         }
                         composeRow
                             .id("compose")
+                        // §6 Notebook: "Below the caret, a one-line hint makes this discoverable."
+                        Text("Dates, times, places, and categories are detected automatically — try “add milk to shopping list”.")
+                            .font(Theme.Typography.meta)
+                            .foregroundStyle(Theme.Color.mutedGrey)
+                            .padding(.top, 2)
                         // Reserves scrollable room below the last row equal to the keyboard's
                         // own height. This is a deliberate belt-and-suspenders fix: even if a
                         // scrollTo call above lands slightly early/late relative to the keyboard's
@@ -103,7 +120,7 @@ struct NoteView: View {
             }
             bottomBar
         }
-        .background(Color(.systemBackground))
+        .background(Theme.Color.paper)
         .onAppear { focusedTarget = .compose }
         .onDisappear { speech.stopRecording() }
         .onChange(of: activateDictation) { _, active in
@@ -124,9 +141,17 @@ struct NoteView: View {
             }
         }
         .sheet(isPresented: $showTasks) {
-            AssistantView()
+            WeekView(initialFilter: weekFilter)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showShoppingList) {
+            ShoppingListView()
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showSettings) {
+            SettingsView()
         }
         // Feedback round 3: tapping a single-task line's indicator opens that task's editor
         // directly — no task list in between.
@@ -155,10 +180,10 @@ struct NoteView: View {
         return HStack(alignment: .top, spacing: 8) {
             ZStack(alignment: .topLeading) {
                 TextField("", text: editingTextBinding(for: line), axis: .vertical)
-                    .font(.body)
+                    .font(Theme.Typography.noteLine)
                     .lineLimit(1...6)
                     .focused($focusedTarget, equals: .line(line.id))
-                    .foregroundStyle(isEditing ? Color.primary : Color.clear)
+                    .foregroundStyle(isEditing ? Theme.Color.ink : Color.clear)
                     .submitLabel(.done)
                     .onSubmit { focusedTarget = nil }
                     .onChange(of: editingTexts[line.id]) { _, newValue in
@@ -169,7 +194,7 @@ struct NoteView: View {
 
                 if !isEditing {
                     highlightedText(line.text, struckThrough: isLineCompleted(line))
-                        .font(.body)
+                        .font(Theme.Typography.noteLine)
                         .allowsHitTesting(false)
                 }
             }
@@ -210,7 +235,8 @@ struct NoteView: View {
 
     private var composeRow: some View {
         TextField("What do you need to do?", text: $composeText, axis: .vertical)
-            .font(.body)
+            .font(Theme.Typography.noteLine)
+            .foregroundStyle(Theme.Color.ink)
             .lineLimit(1...6)
             .focused($focusedTarget, equals: .compose)
             .submitLabel(.done)
@@ -239,17 +265,23 @@ struct NoteView: View {
 
     // §3: subtle inline highlight on detected date phrases, like Notes/Mail link detection —
     // purely visual, computed fresh from the same rules the extraction engine matches against.
-    // Completed lines (every task from this line marked done) render struck through.
+    // A translucent lime highlighter-stroke behind the phrase (not a colored foreground) keeps
+    // the text itself legible ink-on-paper while still using lime for exactly what §3 says it's
+    // for: a state/action signal, not decoration. Completed lines (every task from this line
+    // marked done) render struck through.
     private func highlightedText(_ text: String, struckThrough: Bool) -> Text {
         let ranges = extraction.highlightRanges(in: text, primaryLanguageCode: primaryLanguageCode)
-        let mutable = NSMutableAttributedString(string: text)
+        let mutable = NSMutableAttributedString(
+            string: text,
+            attributes: [.foregroundColor: UIColor(Theme.Color.ink)]
+        )
         for range in ranges {
-            mutable.addAttribute(.foregroundColor, value: UIColor.systemBlue, range: NSRange(range, in: text))
+            mutable.addAttribute(.backgroundColor, value: UIColor(Theme.Color.lime).withAlphaComponent(0.55), range: NSRange(range, in: text))
         }
         if struckThrough {
             let fullRange = NSRange(location: 0, length: (text as NSString).length)
             mutable.addAttribute(.strikethroughStyle, value: NSUnderlineStyle.single.rawValue, range: fullRange)
-            mutable.addAttribute(.foregroundColor, value: UIColor.secondaryLabel, range: fullRange)
+            mutable.addAttribute(.foregroundColor, value: UIColor(Theme.Color.mutedGrey), range: fullRange)
         }
         return Text(AttributedString(mutable))
     }
@@ -260,10 +292,10 @@ struct NoteView: View {
         return tasksForLine.allSatisfy(\.isCompleted)
     }
 
-    // Feedback round 3: always-visible extraction indicators. Time and place ALWAYS show — an
-    // uncrossed icon means the engine found that signal, a crossed/dimmed one means it didn't —
-    // so a glance tells the user exactly what got logged. Details/link/category/priority icons
-    // appear only when present.
+    // §6 Notebook: "on the right, small neutral icons appear only for fields the parser actually
+    // found... A plain task with nothing detected shows nothing on the right" — replaces the
+    // earlier "always show, crossed-out when absent" pattern with icons that only render when
+    // that field is actually present.
     @ViewBuilder
     private func statusIcon(for line: NoteLine) -> some View {
         let tasksForLine = allTasks.filter { $0.sourceLineID == line.id }
@@ -272,21 +304,24 @@ struct NoteView: View {
                 .font(.caption2)
                 .foregroundStyle(.orange)
         } else if !tasksForLine.isEmpty {
-            let hasTime = tasksForLine.contains { $0.dueTime != nil || $0.timeOfDay != nil }
-            let hasPlace = tasksForLine.contains { $0.place != nil }
-            HStack(spacing: 3) {
-                Image(systemName: hasTime ? "clock" : "clock.badge.xmark")
-                    .foregroundStyle(hasTime ? Color.secondary : Color.secondary.opacity(0.35))
-                Image(systemName: hasPlace ? "mappin.and.ellipse" : "mappin.slash")
-                    .foregroundStyle(hasPlace ? Color.secondary : Color.secondary.opacity(0.35))
+            HStack(spacing: 4) {
+                if tasksForLine.contains(where: { $0.dueDate != nil }) {
+                    Image(systemName: "calendar")
+                }
+                if tasksForLine.contains(where: { $0.dueTime != nil || $0.timeOfDay != nil }) {
+                    Image(systemName: "clock")
+                }
+                if tasksForLine.contains(where: { $0.place != nil }) {
+                    Image(systemName: "mappin.and.ellipse")
+                }
                 if tasksForLine.contains(where: { $0.details != nil }) {
-                    Image(systemName: "note.text")
+                    Image(systemName: "list.bullet")
                 }
                 if tasksForLine.contains(where: { $0.linkedGroupID != nil }) {
                     Image(systemName: "link")
                 }
-                if let category = tasksForLine.compactMap(\.category).first {
-                    Image(systemName: categoryIcon(category))
+                if let category = tasksForLine.compactMap(\.category).first, let icon = Theme.categoryIcon(category) {
+                    Image(systemName: icon)
                 }
                 if let priority = tasksForLine.compactMap(\.priority).first {
                     Image(systemName: "flag.fill")
@@ -298,18 +333,7 @@ struct NoteView: View {
                 }
             }
             .font(.caption2)
-            .foregroundStyle(.secondary)
-        }
-    }
-
-    private func categoryIcon(_ category: String) -> String {
-        switch category {
-        case "work": return "briefcase"
-        case "health": return "heart"
-        case "shopping": return "cart"
-        case "finance": return "dollarsign.circle"
-        case "personal": return "person"
-        default: return "tag"
+            .foregroundStyle(Theme.Color.mutedGrey)
         }
     }
 
@@ -321,87 +345,129 @@ struct NoteView: View {
         }
     }
 
-    // Fixed header, NOT inside the ScrollView — a sibling of it in the root VStack. Its purpose
-    // is purely structural: since it's a separate, opaque view sitting above the scroll area, the
-    // note content's own top edge can never visually end up "behind" the system status bar/notch
-    // the way it could when the ScrollView's content was allowed to scroll all the way to y=0.
-    // The calendar icon lives here now (moved from the bottom bar) per explicit request.
+    // §6 Notebook: "Top bar: calendar and shopping-list icons grouped in the center,
+    // settings top-right, nothing else (no date label; the content below makes the date obvious
+    // enough)." Fixed header, NOT inside the ScrollView — a sibling of it in the root VStack, so
+    // the note content's own top edge can never visually end up "behind" the system status
+    // bar/notch the way it could when the ScrollView's content was allowed to scroll to y=0.
     private var topBar: some View {
-        HStack {
-            Text("Notes")
-                .font(.headline)
-            Spacer()
-            Button {
-                showTasks = true
-            } label: {
-                Image(systemName: "calendar")
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
-        .background(.bar)
-    }
-
-    // Amy-style keyboard-docked bar: mic, open-task counts, keyboard dismiss.
-    // Sits as the last item in the root VStack with no ancestor ignoresSafeArea() — SwiftUI's
-    // normal keyboard-avoidance then slides it to sit directly above the keyboard.
-    private var bottomBar: some View {
-        HStack(spacing: 16) {
-            Button {
-                Task { await toggleRecording() }
-            } label: {
-                Image(systemName: isRecording ? "stop.circle.fill" : "mic")
-                    .font(.title2)
-                    .foregroundStyle(isRecording ? .red : .secondary)
-                    .frame(width: 44, height: 44)
-                    .contentTransition(.symbolEffect(.replace))
-            }
-
-            taskCountsPill
-
-            if permissionDenied {
-                Text("Mic access denied")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            if focusedTarget != nil {
+        ZStack {
+            HStack(spacing: 32) {
                 Button {
-                    focusedTarget = nil
+                    weekFilter = nil
+                    showTasks = true
                 } label: {
-                    Image(systemName: "keyboard.chevron.compact.down")
-                        .font(.title2)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 44, height: 44)
+                    Image(systemName: "calendar")
+                        .font(.title3)
+                        .foregroundStyle(Theme.Color.mutedGrey)
+                }
+                Button {
+                    showShoppingList = true
+                } label: {
+                    Image(systemName: "cart")
+                        .font(.title3)
+                        .foregroundStyle(Theme.Color.mutedGrey)
+                }
+            }
+            HStack {
+                Spacer()
+                Button {
+                    showSettings = true
+                } label: {
+                    Image(systemName: "gearshape")
+                        .font(.title3)
+                        .foregroundStyle(Theme.Color.mutedGrey)
                 }
             }
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 8)
-        .background(.bar)
+        .padding(.vertical, 12)
+        .background(Theme.Color.paper)
     }
 
-    private var taskCountsPill: some View {
-        HStack(spacing: 4) {
-            Text("\(openTasks.count)")
-                .fontWeight(.semibold)
-            Text("open")
-                .foregroundStyle(.secondary)
-            Text("·")
-                .foregroundStyle(.secondary)
-            Text("\(todayOpenCount)")
-                .fontWeight(.semibold)
-            Text("today")
-                .foregroundStyle(.secondary)
+    // §6 Notebook: "A compact stat bar is pinned at the bottom: Offen (all open tasks), Heute
+    // (today's), Woche (this week's dated tasks). Each is tappable and actually filters Week
+    // rather than just linking to it." Sits as the last item in the root VStack with no ancestor
+    // ignoresSafeArea() — SwiftUI's normal keyboard-avoidance slides it to sit above the keyboard.
+    private var bottomBar: some View {
+        VStack(spacing: 10) {
+            statBar
+            HStack(spacing: 16) {
+                Button {
+                    Task { await toggleRecording() }
+                } label: {
+                    Image(systemName: isRecording ? "stop.circle.fill" : "mic")
+                        .font(.title2)
+                        .foregroundStyle(isRecording ? .red : Theme.Color.mutedGrey)
+                        .frame(width: 44, height: 44)
+                        .contentTransition(.symbolEffect(.replace))
+                }
+
+                if permissionDenied {
+                    Text("Mic access denied")
+                        .font(.caption2)
+                        .foregroundStyle(Theme.Color.mutedGrey)
+                }
+
+                Spacer()
+
+                if focusedTarget != nil {
+                    Button {
+                        focusedTarget = nil
+                    } label: {
+                        Image(systemName: "keyboard.chevron.compact.down")
+                            .font(.title2)
+                            .foregroundStyle(Theme.Color.mutedGrey)
+                            .frame(width: 44, height: 44)
+                    }
+                }
+            }
         }
-        .font(.caption)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(Capsule().fill(Color.secondary.opacity(0.12)))
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+        .padding(.bottom, 8)
+        .background(Theme.Color.paper)
+    }
+
+    private var statBar: some View {
+        HStack(spacing: 8) {
+            statPill(count: openTasks.count, label: "Open") {
+                weekFilter = .open
+                showTasks = true
+            }
+            statPill(count: todayOpenCount, label: "Today") {
+                weekFilter = .today
+                showTasks = true
+            }
+            statPill(count: weekOpenCount, label: "Week") {
+                weekFilter = .week
+                showTasks = true
+            }
+        }
+    }
+
+    private func statPill(count: Int, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Text("\(count)")
+                    .font(Theme.Typography.statNumber)
+                    .foregroundStyle(Theme.Color.ink)
+                Text(label)
+                    .font(Theme.Typography.meta)
+                    .foregroundStyle(Theme.Color.mutedGrey)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: Theme.Metrics.pillRadius, style: .continuous)
+                    .fill(SwiftUI.Color.white)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: Theme.Metrics.pillRadius, style: .continuous)
+                    .strokeBorder(Theme.Color.hairline)
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Actions
@@ -414,7 +480,7 @@ struct NoteView: View {
         let granted = await speech.requestPermissions()
         if granted {
             focusedTarget = .compose
-            speech.startRecording()
+            speech.startRecording(languageCode: primaryLanguageCode)
         } else {
             permissionDenied = true
         }
@@ -423,6 +489,14 @@ struct NoteView: View {
     private func commitCompose() async {
         let trimmed = composeText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        // Real-device feedback (2026-07-04): "add milk to shopping list" routes straight into the
+        // shopping list instead of becoming a normal note line/task — checked before anything
+        // else touches `trimmed`.
+        if let items = extraction.shoppingListItems(in: trimmed, primaryLanguageCode: primaryLanguageCode) {
+            ShoppingItem.add(items, context: modelContext)
+            composeText = ""
+            return
+        }
         let nextOrder = (lines.map(\.order).max() ?? -1) + 1
         let newLine = NoteLine(text: trimmed, order: nextOrder)
         modelContext.insert(newLine)
@@ -446,6 +520,10 @@ struct NoteView: View {
         }
         var nextOrder = (lines.map(\.order).max() ?? -1) + 1
         for segment in segments {
+            if let items = extraction.shoppingListItems(in: segment, primaryLanguageCode: primaryLanguageCode) {
+                ShoppingItem.add(items, context: modelContext)
+                continue
+            }
             let newLine = NoteLine(text: segment, order: nextOrder)
             nextOrder += 1
             modelContext.insert(newLine)
@@ -464,6 +542,9 @@ struct NoteView: View {
         editingTexts[line.id] = nil
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
+            await deleteLine(line)
+        } else if let items = extraction.shoppingListItems(in: trimmed, primaryLanguageCode: primaryLanguageCode) {
+            ShoppingItem.add(items, context: modelContext)
             await deleteLine(line)
         } else {
             line.text = trimmed
@@ -573,5 +654,5 @@ struct NoteView: View {
 
 #Preview {
     NoteView(activateDictation: .constant(false), showTasks: .constant(false))
-        .modelContainer(for: [TaskItem.self, NoteLine.self, EntityMemory.self], inMemory: true)
+        .modelContainer(for: [TaskItem.self, NoteLine.self, EntityMemory.self, ShoppingItem.self], inMemory: true)
 }

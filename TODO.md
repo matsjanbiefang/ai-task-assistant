@@ -297,3 +297,57 @@ from `IMPLEMENTATION-LOG.md`'s "Next actions" before considering Milestone 1 tru
       "friday"-style single-date behavior or the known Friday-bug baseline at all — only the new
       range matcher consumes it. UI: `TaskEditView` gets a "Has end date" toggle mirroring "Has due
       date" exactly; `AssistantView`'s task row renders `"Jul 9 – Jul 11"` when a range is present.
+
+## Real-device feedback fixes (2026-07-04)
+
+- [x] **RDF-3** German `addressPattern` required a leading preposition ("in der"/"an der"/"bei
+      der"/"in"/"an"/"bei") before a street name — "Meeting Rosenstraße" (no preposition) wasn't
+      recognized at all. The preposition group in `de.json`'s `addressPattern` is now optional, so
+      the street-type-suffix shape alone (`straße`/`strasse`/`allee`/`weg`/`platz`/`gasse`) is
+      enough to match, same as before when a preposition WAS present.
+- [x] **RDF-4** German date ranges ("Trip nächste Woche von Dienstag bis Donnerstag") produced no
+      range at all — `dateRangeMatch` (RDF-2) requires `rangeFromWord`/`rangeToWord`, which were
+      `null` for every language except English. Populated `de.json`'s `dateRules.rangeFromWord`/
+      `rangeToWord` with "von"/"bis" — same mechanism, no engine changes needed, matching RDF-2's
+      "populate only where verified" precedent.
+- [x] **RDF-5** Dictation only ever recognized English regardless of the app's chosen note-taking
+      language — `SpeechRecognizer` built its `SFSpeechRecognizer` from `Locale.current` (the
+      device's system language) once at `init()`, never from `primaryLanguageCode`. Now rebuilt
+      per-recording from a `languageCode` parameter (`SpeechRecognizer.swift`), mapped to a
+      region-qualified locale identifier (e.g. "de" -> "de-DE"); `NoteView` passes
+      `primaryLanguageCode` in.
+- [x] **RDF-6** "add milk to shopping list" / "Milch auf die Einkaufsliste" now routes into a new
+      Shopping list feature instead of becoming a normal task — `RuleBasedExtractionService.
+      shoppingListItems` (new `shoppingListPattern` per-language field, en/de populated, same
+      "populate only where verified" precedent), a new `ShoppingItem` model, and `ShoppingListView`
+      (reachable from Notebook's new top-bar cart icon). `NoteView`'s three commit paths
+      (`commitCompose`/`commitDictatedText`/`commitLine`) check the cue phrase first and skip
+      normal `NoteLine`/task creation when it matches.
+
+## Design pass — swipe-design-concept.md "Lime v4" (2026-07-04)
+
+- [x] Bundled Bricolage Grotesque + Outfit (OFL, from google/fonts) under `AiTaskAssistant/Fonts/`,
+      registered via `UIAppFonts` in Info.plist. **NOT verified on-device** (no Mac toolchain in
+      this environment) — see the font-name caveat in `Theme.swift`'s `Typography` doc comment
+      before assuming the display font is actually rendering as Bricolage Grotesque rather than a
+      silent system-font fallback.
+- [x] New `DesignSystem/Theme.swift` — the Lime palette (§3), typography scale (§5), and the
+      category-icon mapping (§4, `TaskCategoryType` has 6 cases vs. the doc's 3, so the extra 3
+      were given icons in the same spirit rather than left inconsistent).
+- [x] Notebook (`NoteView`) restyled to §6: top bar now just calendar/cart (center) + settings
+      (top-right), status icons only render for fields actually found (previously always-visible
+      with crossed-out variants for absent fields), stat bar is now three tappable Open/Today/Week
+      pills that filter Week. **Line-tap-to-edit behavior deliberately left unchanged** (explicit
+      user decision) even though §6 describes tap-to-complete — see the doc comment on
+      `TaskEditView`/`WeekView` "Detail"/"Week" for where completion actually happens now.
+- [x] `AssistantView` renamed to `WeekView` and rebuilt to §6 "Week": 7-day strip (today filled
+      lime), category legend, day-grouped rounded cards with a lime/grey open-vs-done accent bar,
+      dashed-border "No date" section, and a stat-bar filtered mode (header swap + "Show all" chip).
+- [x] `TaskEditView` restyled to §6 "Detail": category chip menu, lime-filled primary "Mark as
+      done"/"Mark as not done" button, and a new quiet destructive "Delete task" action (didn't
+      exist before this pass at all).
+- [x] New minimal `SettingsView` (language picker only) and `ShoppingListView`, both reachable from
+      Notebook's restyled top bar — the doc's §7 "Settings — icon exists, screen doesn't" and
+      "Shopping list" open questions.
+- Still open per the doc's own §7 list (not attempted here): swipe-to-delete anywhere, and
+      designed empty states beyond the plain ones added to Week/Shopping list.
