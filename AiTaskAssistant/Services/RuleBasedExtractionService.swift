@@ -117,6 +117,14 @@ struct LanguageRules: Sendable {
     // fixed keyword list — this instead recognizes the SHAPE "at/on/in <words> <street-type
     // word>" and captures the whole phrase, regardless of which specific street it names.
     let addressPattern: String?
+    // Real-device feedback (2026-07-04): "add milk to shopping list" / "Milch auf die
+    // Einkaufsliste" should route straight into the shopping list rather than becoming a normal
+    // dated task. One capture group — the item phrase(s), split on `conjunctionWords`/commas by
+    // `RuleBasedExtractionService.shoppingListItems`. Must match the ENTIRE (filler-stripped)
+    // line, same convention as `titleReductionRules`/`detailPatterns`, so it can't misfire on a
+    // clause that only mentions "shopping list" in passing. nil except en/de today — same
+    // "populate only where verified" precedent as STT-1/RDF-2.
+    let shoppingListPattern: String?
     let fillerPrefixes: [String]                   // modal/discourse lead-ins stripped from clause start ("i need to", "ich muss")
     let fillerWords: [String]                      // discourse fillers stripped from clause edges ("also", "bitte", "nicht vergessen")
     let detailPatterns: [String]                   // full-clause regexes marking a clause as a DETAIL of the previous action
@@ -156,6 +164,7 @@ struct LanguageRules: Sendable {
         categoryKeywords: [TaskCategory: [String]],
         placeKeywords: [String: String],
         addressPattern: String? = nil,
+        shoppingListPattern: String? = nil,
         fillerPrefixes: [String],
         fillerWords: [String],
         detailPatterns: [String],
@@ -189,6 +198,7 @@ struct LanguageRules: Sendable {
         self.categoryKeywords = categoryKeywords
         self.placeKeywords = placeKeywords
         self.addressPattern = addressPattern
+        self.shoppingListPattern = shoppingListPattern
         self.fillerPrefixes = fillerPrefixes
         self.fillerWords = fillerWords
         self.detailPatterns = detailPatterns
@@ -593,6 +603,47 @@ struct RuleBasedExtractionService: Sendable {
             return words.joined(separator: " ")
         }
         return nil
+    }
+
+    // MARK: - Shopping list detection (real-device feedback, 2026-07-04)
+
+    // "add milk to shopping list" / "Milch auf die Einkaufsliste" — a dedicated cue phrase that
+    // routes the whole line into the shopping list instead of the normal task pipeline. Requires
+    // a FULL-line match (after filler-stripping), same convention as `reduceTitle`/
+    // `isDetailClause`, so an incidental mention of "shopping list" inside an ordinary task
+    // ("mention the shopping list at the meeting") can't misfire. Returns nil when no language's
+    // `shoppingListPattern` matches — the caller then falls through to normal task extraction.
+    func shoppingListItems(in rawLine: String, primaryLanguageCode: String) -> [String]? {
+        let rulesList = candidateRules(for: rawLine, primaryLanguageCode: primaryLanguageCode)
+        let text = stripFillers(rawLine.trimmingCharacters(in: .whitespaces), rulesList: rulesList)
+        guard !text.isEmpty else { return nil }
+        let nsText = text as NSString
+        let fullRange = NSRange(location: 0, length: nsText.length)
+        for rules in rulesList {
+            guard let pattern = rules.shoppingListPattern,
+                  let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+                  let match = regex.firstMatch(in: text, range: fullRange),
+                  match.range.location == 0, match.range.length == nsText.length,
+                  match.numberOfRanges > 1,
+                  let range = Range(match.range(at: 1), in: text) else { continue }
+            let items = splitConjoinedItems(String(text[range]), rules: rules)
+            guard !items.isEmpty else { continue }
+            return items
+        }
+        return nil
+    }
+
+    // "milk and eggs" -> ["Milk", "Eggs"] — reuses the same conjunction words line-splitting
+    // already relies on, plus a plain comma, so "milk, eggs and bread" also splits correctly.
+    private func splitConjoinedItems(_ phrase: String, rules: LanguageRules) -> [String] {
+        var parts = [phrase]
+        for conjunction in rules.conjunctionWords {
+            parts = parts.flatMap { $0.components(separatedBy: " \(conjunction) ") }
+        }
+        parts = parts.flatMap { $0.components(separatedBy: ",") }
+        return parts
+            .map { capitalizeFirst($0.trimmingCharacters(in: .whitespaces)) }
+            .filter { !$0.isEmpty }
     }
 
     // MARK: - Language detection (§2)

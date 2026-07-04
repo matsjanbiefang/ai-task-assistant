@@ -19,6 +19,10 @@ struct ContentView: View {
             }
         } else {
             NoteView(activateDictation: $activateDictation, showTasks: $showTasks)
+                // swipe-design-concept.md §3: the whole "Lime" palette (paper/ink/lime) is defined
+                // once, with no dark-mode variant — it's a deliberate paper-notebook identity, not
+                // a color scheme that should invert with the system setting.
+                .preferredColorScheme(.light)
                 .onChange(of: deepLinkDestination) { _, destination in
                     if destination == .assistant {
                         showTasks = true
@@ -34,5 +38,5 @@ struct ContentView: View {
 
 #Preview {
     ContentView(deepLinkDestination: .constant(nil))
-        .modelContainer(for: [TaskItem.self, NoteLine.self, EntityMemory.self], inMemory: true)
+        .modelContainer(for: [TaskItem.self, NoteLine.self, EntityMemory.self, ShoppingItem.self], inMemory: true)
 }

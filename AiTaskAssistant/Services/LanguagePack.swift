@@ -19,6 +19,7 @@ struct LanguagePackDTO: Decodable {
     let actionVerbs: ActionVerbsDTO
     let categoryKeywords: [String: [String]]
     let locationPatterns: LocationPatternsDTO
+    let shoppingList: ShoppingListDTO
     let detailClauseMarkers: DetailClauseMarkersDTO
     let stopwords: StopwordsDTO
     let fillerPhrases: [String]
@@ -71,6 +72,13 @@ struct ActionVerbsDTO: Decodable {
 struct LocationPatternsDTO: Decodable {
     let placeKeywords: [String: String]
     let addressPattern: String?
+}
+
+// Real-device feedback (2026-07-04): "add milk to shopping list" / "Milch auf die
+// Einkaufsliste" cue-phrase detection — see `shoppingListPattern`'s doc comment in
+// RuleBasedExtractionService.swift. `pattern` is null for every pack except en/de today.
+struct ShoppingListDTO: Decodable {
+    let pattern: String?
 }
 
 struct DetailClauseMarkersDTO: Decodable {
@@ -132,6 +140,7 @@ extension LanguagePackDTO {
             categoryKeywords: resolvedCategoryKeywords,
             placeKeywords: locationPatterns.placeKeywords,
             addressPattern: locationPatterns.addressPattern,
+            shoppingListPattern: shoppingList.pattern,
             fillerPrefixes: fillerPhrases,
             fillerWords: stopwords.words,
             detailPatterns: detailClauseMarkers.detailPatterns,

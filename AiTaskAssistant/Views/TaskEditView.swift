@@ -1,6 +1,12 @@
 import SwiftUI
 import SwiftData
 
+// swipe-design-concept.md §6 "Detail": "Title, category chip, and four fields — date, time,
+// place, category — each in its own tappable row for quick editing. One primary action (mark
+// done) and one quiet destructive one (delete), visually de-emphasized so it's not accidentally
+// hit." The doc leaves the exact editing mechanism unresolved (§7 "Editing flow"); this keeps the
+// proven toggle-then-DatePicker interaction (each field IS its own tappable Form row already) and
+// layers the header/chip/button restyle on top of it rather than inventing a new interaction.
 struct TaskEditView: View {
     @Bindable var task: TaskItem
     @Environment(\.dismiss) private var dismiss
@@ -8,12 +14,21 @@ struct TaskEditView: View {
     // Milestone 8: snapshot on appear so the "Done" handler can tell whether the user actually
     // changed `place` (a ground-truth correction) vs. leaving it as the engine extracted it.
     @State private var originalPlace: String?
+    @State private var showDeleteConfirmation = false
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("Task") {
-                    TextField("Title", text: $task.title)
+                Section {
+                    VStack(alignment: .leading, spacing: 10) {
+                        TextField("Title", text: $task.title)
+                            .font(Theme.Typography.screenTitle)
+                            .foregroundStyle(Theme.Color.ink)
+                        categoryChipMenu
+                    }
+                    .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16))
+                    .listRowBackground(SwiftUI.Color.clear)
+
                     TextField("Place", text: Binding(
                         get: { task.place ?? "" },
                         set: { task.place = $0.isEmpty ? nil : $0 }
@@ -70,7 +85,7 @@ struct TaskEditView: View {
                         HStack {
                             Text("Time of day")
                             Spacer()
-                            Text(timeOfDay).foregroundStyle(.secondary)
+                            Text(timeOfDay).foregroundStyle(Theme.Color.mutedGrey)
                         }
                     }
                 }
@@ -79,11 +94,11 @@ struct TaskEditView: View {
                     Section("Linked task") {
                         Label("Step \((task.sequenceIndex ?? 0) + 1) of 2 — part of a multi-step task", systemImage: "link")
                             .font(.footnote)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Theme.Color.mutedGrey)
                     }
                 }
 
-                Section("Details") {
+                Section("Priority") {
                     Picker("Priority", selection: Binding(
                         get: { task.priority ?? "" },
                         set: { task.priority = $0.isEmpty ? nil : $0 }
@@ -93,30 +108,39 @@ struct TaskEditView: View {
                             Text(p.rawValue.capitalized).tag(p.rawValue)
                         }
                     }
-
-                    Picker("Category", selection: Binding(
-                        get: { task.category ?? "" },
-                        set: { task.category = $0.isEmpty ? nil : $0 }
-                    )) {
-                        Text("None").tag("")
-                        ForEach(TaskCategoryType.allCases, id: \.rawValue) { c in
-                            Text(c.rawValue.capitalized).tag(c.rawValue)
-                        }
-                    }
                 }
 
+                // §6: "One primary action (mark done) and one quiet destructive one (delete),
+                // visually de-emphasized so it's not accidentally hit."
                 Section {
-                    Button("Mark complete", role: .destructive) {
-                        task.isCompleted = true
-                        try? modelContext.save()
-                        deleteLineIfAllTasksComplete()
-                        dismiss()
+                    Button {
+                        toggleCompletion()
+                    } label: {
+                        Text(task.isCompleted ? "Mark as not done" : "Mark as done")
                     }
+                    .buttonStyle(.lime)
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(SwiftUI.Color.clear)
+
+                    Button(role: .destructive) {
+                        showDeleteConfirmation = true
+                    } label: {
+                        Text("Delete task")
+                            .font(Theme.Typography.body(14))
+                            .frame(maxWidth: .infinity)
+                    }
+                    .listRowBackground(SwiftUI.Color.clear)
                 }
             }
-            .navigationTitle("Edit Task")
+            .scrollContentBackground(.hidden)
+            .background(Theme.Color.paper)
+            .navigationTitle("Task")
             .navigationBarTitleDisplayMode(.inline)
             .onAppear { originalPlace = task.place }
+            .confirmationDialog("Delete this task?", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
+                Button("Delete", role: .destructive) { deleteTask() }
+                Button("Cancel", role: .cancel) {}
+            }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
@@ -131,22 +155,64 @@ struct TaskEditView: View {
                         try? modelContext.save()
                         dismiss()
                     }
+                    .foregroundStyle(Theme.Color.ink)
                 }
             }
         }
     }
 
-    // Explicit request: once every task from a note line is done, the line itself disappears
-    // from the notebook rather than sitting there struck through. A "linked" multi-step line's
-    // other step(s) must ALSO be complete first — checked via allSatisfy over every task sharing
-    // the same sourceLineID, not just this one.
-    private func deleteLineIfAllTasksComplete() {
-        guard let lineID = task.sourceLineID else { return }
-        let taskDescriptor = FetchDescriptor<TaskItem>(predicate: #Predicate<TaskItem> { $0.sourceLineID == lineID })
-        guard let siblingTasks = try? modelContext.fetch(taskDescriptor), siblingTasks.allSatisfy(\.isCompleted) else { return }
-        let lineDescriptor = FetchDescriptor<NoteLine>(predicate: #Predicate<NoteLine> { $0.id == lineID })
-        guard let line = try? modelContext.fetch(lineDescriptor).first else { return }
-        modelContext.delete(line)
-        try? modelContext.save()
+    // §4: categories are told apart by icon shape, never hue — the chip mirrors that everywhere
+    // else it appears (Notebook row, task card meta line, Week legend).
+    private var categoryChipMenu: some View {
+        Menu {
+            Button("None") { task.category = nil }
+            ForEach(TaskCategoryType.allCases, id: \.rawValue) { category in
+                Button {
+                    task.category = category.rawValue
+                } label: {
+                    if let icon = Theme.categoryIcon(category.rawValue) {
+                        Label(Theme.categoryLabel(category.rawValue), systemImage: icon)
+                    } else {
+                        Text(Theme.categoryLabel(category.rawValue))
+                    }
+                }
+            }
+        } label: {
+            if let category = task.category, let icon = Theme.categoryIcon(category) {
+                Label(Theme.categoryLabel(category), systemImage: icon)
+                    .font(Theme.Typography.fieldLabel)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Theme.Color.hairline, in: Capsule())
+                    .foregroundStyle(Theme.Color.ink)
+            } else {
+                Label("Add category", systemImage: "tag")
+                    .font(Theme.Typography.fieldLabel)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Theme.Color.hairline, in: Capsule())
+                    .foregroundStyle(Theme.Color.mutedGrey)
+            }
+        }
     }
+
+    private func toggleCompletion() {
+        task.isCompleted.toggle()
+        try? modelContext.save()
+        if task.isCompleted {
+            modelContext.deleteLineIfAllTasksComplete(for: task)
+        }
+    }
+
+    private func deleteTask() {
+        Task { await NotificationService.shared.cancel(taskID: task.id.uuidString) }
+        modelContext.delete(task)
+        try? modelContext.save()
+        dismiss()
+    }
+}
+
+#Preview {
+    TaskEditView(task: TaskItem(title: "Sample"))
+        .modelContainer(for: [TaskItem.self, NoteLine.self], inMemory: true)
 }

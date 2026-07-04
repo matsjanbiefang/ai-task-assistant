@@ -37,6 +37,15 @@
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
+	<!-- swipe-design-concept.md §5: Bricolage Grotesque (display) / Outfit (body) — bundled as
+	     variable-font .ttf files under AiTaskAssistant/Fonts/. Registering them here is what makes
+	     `Font.custom("Bricolage Grotesque", ...)` / `Font.custom("Outfit", ...)` resolve to the
+	     real typefaces instead of silently falling back to the system font. -->
+	<key>UIAppFonts</key>
+	<array>
+		<string>BricolageGrotesque.ttf</string>
+		<string>Outfit.ttf</string>
+	</array>
 	<!-- M2: Voice input -->
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Used to capture tasks by voice so you can add them hands-free.</string>

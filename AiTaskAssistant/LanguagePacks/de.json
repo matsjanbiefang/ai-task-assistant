@@ -13,7 +13,9 @@
       {"pattern": "\\b(?:diesen|diese)\\s+(sonntag|montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonnabend)\\b", "skipToday": false, "confidence": 0.85},
       {"pattern": "\\b(sonntag|montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonnabend)\\b", "skipToday": false, "confidence": 0.6}
     ],
-    "nextWeekPattern": "\\bnächste\\s+woche\\b"
+    "nextWeekPattern": "\\bnächste\\s+woche\\b",
+    "rangeFromWord": "von",
+    "rangeToWord": "bis"
   },
   "timeWords": {
     "timePattern": "\\b(?:um\\s+)?(\\d{1,2})(?:[:.](\\d{2}))?\\s*uhr\\b",
@@ -48,7 +50,10 @@
       "post": "Post", "bäcker": "Bäcker", "restaurant": "Restaurant", "kirche": "Kirche",
       "bibliothek": "Bibliothek", "rathaus": "Rathaus"
     },
-    "addressPattern": "\\b(?:in der|an der|bei der|in|an|bei)\\s+([\\wäöüß]+(?:straße|strasse|allee|weg|platz|gasse))\\b"
+    "addressPattern": "\\b(?:(?:in der|an der|bei der|in|an|bei)\\s+)?([\\wäöüß]+(?:straße|strasse|allee|weg|platz|gasse))\\b"
+  },
+  "shoppingList": {
+    "pattern": "^(?:füge\\s+)?(.+?)\\s+(?:auf\\s+die|zur)\\s+einkaufsliste(?:\\s+(?:setzen|packen|schreiben|hinzuf(?:ü|ue)gen|hinzu))?$"
   },
   "detailClauseMarkers": {
     "detailPatterns": [

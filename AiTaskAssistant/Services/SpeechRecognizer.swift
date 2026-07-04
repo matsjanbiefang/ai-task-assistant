@@ -17,8 +17,26 @@ final class SpeechRecognizer {
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
 
-    init() {
-        recognizer = SFSpeechRecognizer(locale: Locale.current)
+    // Real-device feedback (2026-07-04): dictation only ever recognized English, regardless of
+    // the note-taking language chosen at onboarding — `Locale.current` is the DEVICE's system
+    // language (e.g. many users run iOS itself in English while writing notes in German), not
+    // `primaryLanguageCode`. The recognizer is now (re)built per-recording from the caller's
+    // language code instead of once at init from the device locale.
+    private static func recognizerLocale(for languageCode: String) -> Locale {
+        // SFSpeechRecognizer matches most reliably against a full region-qualified identifier
+        // rather than a bare language code — this maps each of the 24 supported languages
+        // (SupportedLanguage) to its most common region. Falls back to the bare code for anything
+        // missing here; Locale(identifier:) never fails, and `SFSpeechRecognizer(locale:)`
+        // returning nil / `.isAvailable == false` is already handled by the unavailable-state
+        // guard in `startRecording`.
+        let regionByLanguage: [String: String] = [
+            "en": "en-US", "de": "de-DE", "fr": "fr-FR", "es": "es-ES", "it": "it-IT",
+            "pt": "pt-PT", "nl": "nl-NL", "pl": "pl-PL", "bg": "bg-BG", "hr": "hr-HR",
+            "cs": "cs-CZ", "da": "da-DK", "et": "et-EE", "fi": "fi-FI", "el": "el-GR",
+            "hu": "hu-HU", "ga": "ga-IE", "lv": "lv-LV", "lt": "lt-LT", "mt": "mt-MT",
+            "ro": "ro-RO", "sk": "sk-SK", "sl": "sl-SI", "sv": "sv-SE",
+        ]
+        return Locale(identifier: regionByLanguage[languageCode] ?? languageCode)
     }
 
     // Confirmed via an actual TestFlight crash log (2026-07-02, iPhone 14 / iOS 26.5):
@@ -41,7 +59,9 @@ final class SpeechRecognizer {
         return audioStatus
     }
 
-    func startRecording() {
+    func startRecording(languageCode: String) {
+        let recognizer = SFSpeechRecognizer(locale: Self.recognizerLocale(for: languageCode))
+        self.recognizer = recognizer
         guard let recognizer, recognizer.isAvailable else {
             state = .unavailable
             return

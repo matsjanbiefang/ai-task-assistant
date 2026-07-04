@@ -53,6 +53,9 @@
     },
     "addressPattern": null
   },
+  "shoppingList": {
+    "pattern": null
+  },
   "detailClauseMarkers": {
     "detailPatterns": [
       "^(?:portare|prendere)\\s+.+$",
