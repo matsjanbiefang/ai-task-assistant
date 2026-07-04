@@ -351,3 +351,27 @@ from `IMPLEMENTATION-LOG.md`'s "Next actions" before considering Milestone 1 tru
       "Shopping list" open questions.
 - Still open per the doc's own §7 list (not attempted here): swipe-to-delete anywhere, and
       designed empty states beyond the plain ones added to Week/Shopping list.
+
+## Real-device feedback (2026-07-04, round 2) — "lime-v4" mockup + time ranges
+
+- [x] **RDF-7** `TaskEditView` ("Detail") rebuilt to match the actual "lime-v4" Figma reference
+      mockup pixel-for-pixel rather than the prior Form-based approximation: a gradient hero card
+      (sky-pale-wash → lime, back chevron + edit pencil, big title, category chip) above pill-
+      shaped field rows (Date/Time/Place/Category, plus Priority/Details/linked-task only when
+      present), a lime "Mark as done" button, and a quiet "Delete task" text link. No
+      NavigationStack chrome — the hero's own back chevron dismisses. Editing a field opens a
+      small `.sheet` (reuses the proven Toggle+DatePicker interaction) instead of cluttering the
+      main screen, so the primary view stays visually identical to the reference at all times.
+- [x] **RDF-8** German date range ("Trip nächste Woche von Dienstag bis Donnerstag") re-verified
+      after a report that it "isn't recognized" — the regex and full pipeline both still match
+      correctly (confirmed independently outside the app and via a new
+      `germanDateRangeStillMatchesWithLeadingWords` test with an added "Hamburg" prefix). Most
+      likely explanation: the report was tested against the pre-build-12 TestFlight install before
+      Apple finished processing the new build. No code change was needed for this one specifically
+      — flagged to the user to confirm they're on build 12+ before assuming a regression.
+- [x] **RDF-9** German time ranges ("Arzttermin 10 bis 12 Uhr") were never supported at all — the
+      single-time pattern matched only the range's END ("12 Uhr"), silently dropping the start.
+      New `ExtractedTask.dueEndTime`/`TaskItem.dueEndTime`, a new `timeRangeMatch` matcher and
+      `timeRangePattern` per-language field (German only, same "populate only where verified"
+      precedent as RDF-2/RDF-4), tried before the plain single-time matchers. Week's card and the
+      new Detail screen both render a range as "10:00–12:00".

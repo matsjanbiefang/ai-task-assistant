@@ -54,6 +54,9 @@ struct WeekdayPhraseRuleDTO: Decodable {
 
 struct TimeWordsDTO: Decodable {
     let timePattern: String?
+    // Real-device feedback (2026-07-04): "Arzttermin 10 bis 12 Uhr" — see `timeRangePattern`'s doc
+    // comment in RuleBasedExtractionService.swift. null for every pack except German today.
+    let timeRangePattern: String?
     let timeOfDayWords: [String: String]
     let vagueTimeOfDayWords: [String: String]
     let laterOffsetWords: [String]
@@ -133,6 +136,7 @@ extension LanguagePackDTO {
             rangeFromWord: dateRules.rangeFromWord,
             rangeToWord: dateRules.rangeToWord,
             timePattern: timeWords.timePattern,
+            timeRangePattern: timeWords.timeRangePattern,
             timeOfDayWords: timeWords.timeOfDayWords,
             vagueTimeOfDayWords: timeWords.vagueTimeOfDayWords,
             laterOffsetWords: timeWords.laterOffsetWords,

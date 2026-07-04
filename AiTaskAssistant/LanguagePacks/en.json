@@ -15,6 +15,7 @@
   },
   "timeWords": {
     "timePattern": null,
+    "timeRangePattern": null,
     "timeOfDayWords": {"noon": "12:00", "midday": "12:00"},
     "vagueTimeOfDayWords": {
       "tomorrow morning": "Morning", "tomorrow afternoon": "Afternoon",

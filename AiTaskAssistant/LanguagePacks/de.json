@@ -19,6 +19,7 @@
   },
   "timeWords": {
     "timePattern": "\\b(?:um\\s+)?(\\d{1,2})(?:[:.](\\d{2}))?\\s*uhr\\b",
+    "timeRangePattern": "\\b(?:von\\s+)?(\\d{1,2})(?:[:.](\\d{2}))?\\s*(?:bis|-)\\s*(\\d{1,2})(?:[:.](\\d{2}))?\\s*uhr\\b",
     "timeOfDayWords": {"mittags": "12:00"},
     "vagueTimeOfDayWords": {"morgens": "Morgens", "vormittags": "Vormittags", "nachmittags": "Nachmittags", "abends": "Abends", "nachts": "Nachts"},
     "laterOffsetWords": ["später"]

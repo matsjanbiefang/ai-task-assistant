@@ -565,6 +565,7 @@ struct NoteView: View {
                 title: task.title,
                 dueDate: dueDate,
                 dueTime: parsedTime(task.dueTime, referenceDay: dueDate),
+                dueEndTime: parsedTime(task.dueEndTime, referenceDay: dueDate),
                 dueEndDate: parsedDate(task.dueEndDate),
                 priority: task.priority?.rawValue,
                 category: task.category?.rawValue,

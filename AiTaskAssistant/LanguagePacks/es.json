@@ -17,6 +17,7 @@
   },
   "timeWords": {
     "timePattern": "\\ba\\s+las\\s+(\\d{1,2})(?::(\\d{2}))?\\b",
+    "timeRangePattern": null,
     "timeOfDayWords": {"mediodía": "12:00"},
     "vagueTimeOfDayWords": {"por la mañana": "Mañana", "por la tarde": "Tarde", "por la noche": "Noche"},
     "laterOffsetWords": ["más tarde"]

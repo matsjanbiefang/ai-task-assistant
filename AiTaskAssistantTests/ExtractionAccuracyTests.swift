@@ -501,6 +501,36 @@ struct ExtractionAccuracyTests {
         #expect(task.dueEndDate == formatter.string(from: expectedEnd))
     }
 
+    // Real-device follow-up: an extra leading word ("Hamburg Trip" vs. just "Trip") must not
+    // break the range match — the regex searches the whole line, not just its start.
+    @Test
+    func germanDateRangeStillMatchesWithLeadingWords() {
+        let service = RuleBasedExtractionService.shared
+        let tasks = service.extractLine("hamburg trip nächste woche von dienstag bis donnerstag", referenceDate: corpusToday)
+        guard let task = tasks.first else {
+            Issue.record("expected at least one task")
+            return
+        }
+        #expect(task.dueDate != nil)
+        #expect(task.dueEndDate != nil)
+    }
+
+    // Real-device feedback (2026-07-04): "Arzttermin 10 bis 12 Uhr" produced only a single time
+    // (12:00, the range's END) — the plain single-time pattern matched "12 Uhr" on its own since
+    // nothing recognized "10 bis 12 Uhr" as one phrase. Mirrors the date-range tests above.
+    @Test
+    func germanTimeRangeProducesStartAndEndTime() {
+        let service = RuleBasedExtractionService.shared
+        let tasks = service.extractLine("arzttermin 10 bis 12 uhr", referenceDate: corpusToday)
+        guard let task = tasks.first else {
+            Issue.record("expected at least one task")
+            return
+        }
+        #expect(task.dueTime == "10:00")
+        #expect(task.dueEndTime == "12:00")
+        #expect(task.title == "Arzttermin")
+    }
+
     // MARK: Real-device feedback (2026-07-04) — shopping list cue-phrase detection. Not part of
     // extractLine's pipeline (NoteView checks this FIRST and routes matches to ShoppingItem
     // instead), so tested directly against the new `shoppingListItems` entry point.

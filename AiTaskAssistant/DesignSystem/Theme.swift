@@ -64,6 +64,10 @@ enum Theme {
         static let cardRadius: CGFloat = 16
         static let pillRadius: CGFloat = 14
         static let accentBarWidth: CGFloat = 4
+        // Detail screen's gradient hero card and its field-row pills below — both far more
+        // rounded than the Week card system above.
+        static let heroCardRadius: CGFloat = 32
+        static let fieldRowRadius: CGFloat = 24
     }
 
     /// §4: categories are told apart by icon SHAPE, not hue. The concept names three (Arbeit/

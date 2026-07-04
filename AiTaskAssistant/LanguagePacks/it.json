@@ -17,6 +17,7 @@
   },
   "timeWords": {
     "timePattern": "\\balle\\s+(\\d{1,2})(?::(\\d{2}))?\\b",
+    "timeRangePattern": null,
     "timeOfDayWords": {"mezzogiorno": "12:00"},
     "vagueTimeOfDayWords": {"mattina": "Mattina", "pomeriggio": "Pomeriggio", "sera": "Sera", "notte": "Notte"},
     "laterOffsetWords": ["più tardi"]

@@ -17,6 +17,7 @@
   },
   "timeWords": {
     "timePattern": "\\bo\\s+godzinie\\s+(\\d{1,2})(?::(\\d{2}))?\\b",
+    "timeRangePattern": null,
     "timeOfDayWords": {"południe": "12:00"},
     "vagueTimeOfDayWords": {"rano": "Rano", "popołudniu": "Popołudniu", "wieczorem": "Wieczorem", "noc": "Noc"},
     "laterOffsetWords": ["później"]
