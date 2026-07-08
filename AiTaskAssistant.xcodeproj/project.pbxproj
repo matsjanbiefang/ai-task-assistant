@@ -51,6 +51,7 @@
 		A1000045 /* PaywallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000049 /* PaywallView.swift */; };
 		A1000046 /* SharedModelContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000050 /* SharedModelContainer.swift */; };
 		A1000047 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = A2000053 /* Localizable.xcstrings */; };
+		A1000048 /* OnboardingFlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000054 /* OnboardingFlowView.swift */; };
 		C1000001 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = C3000001 /* RevenueCat */; };
 		D1000001 /* AiTaskAssistantWidgetsBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2000002 /* AiTaskAssistantWidgetsBundle.swift */; };
 		D1000002 /* TaskWidgetData.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2000003 /* TaskWidgetData.swift */; };
@@ -111,6 +112,7 @@
 		A2000050 /* SharedModelContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedModelContainer.swift; sourceTree = "<group>"; };
 		A2000052 /* AiTaskAssistant.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AiTaskAssistant.entitlements; sourceTree = "<group>"; };
 		A2000053 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		A2000054 /* OnboardingFlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingFlowView.swift; sourceTree = "<group>"; };
 		D2000002 /* AiTaskAssistantWidgetsBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AiTaskAssistantWidgetsBundle.swift; sourceTree = "<group>"; };
 		D2000003 /* TaskWidgetData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskWidgetData.swift; sourceTree = "<group>"; };
 		D2000004 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -228,6 +230,7 @@
 				A2000046 /* TaskCardView.swift */,
 				A2000047 /* TasklistView.swift */,
 				A2000049 /* PaywallView.swift */,
+				A2000054 /* OnboardingFlowView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -487,6 +490,7 @@
 				A1000044 /* SubscriptionService.swift in Sources */,
 				A1000045 /* PaywallView.swift in Sources */,
 				A1000046 /* SharedModelContainer.swift in Sources */,
+				A1000048 /* OnboardingFlowView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

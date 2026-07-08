@@ -11,11 +11,13 @@ struct ContentView: View {
     @State private var activateDictation = false
     @State private var showTasks = false
     @AppStorage("primaryLanguageCode") private var primaryLanguageCode = ""
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
 
     var body: some View {
-        if primaryLanguageCode.isEmpty {
-            OnboardingLanguageView { language in
+        if !hasCompletedOnboarding {
+            OnboardingFlowView { language in
                 primaryLanguageCode = language.rawValue
+                hasCompletedOnboarding = true
             }
         } else {
             NoteView(activateDictation: $activateDictation, showTasks: $showTasks)
