@@ -50,6 +50,7 @@
 		A1000044 /* SubscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000048 /* SubscriptionService.swift */; };
 		A1000045 /* PaywallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000049 /* PaywallView.swift */; };
 		A1000046 /* SharedModelContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000050 /* SharedModelContainer.swift */; };
+		A1000047 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = A2000053 /* Localizable.xcstrings */; };
 		C1000001 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = C3000001 /* RevenueCat */; };
 		D1000001 /* AiTaskAssistantWidgetsBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2000002 /* AiTaskAssistantWidgetsBundle.swift */; };
 		D1000002 /* TaskWidgetData.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2000003 /* TaskWidgetData.swift */; };
@@ -109,6 +110,7 @@
 		A2000049 /* PaywallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaywallView.swift; sourceTree = "<group>"; };
 		A2000050 /* SharedModelContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedModelContainer.swift; sourceTree = "<group>"; };
 		A2000052 /* AiTaskAssistant.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AiTaskAssistant.entitlements; sourceTree = "<group>"; };
+		A2000053 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		D2000002 /* AiTaskAssistantWidgetsBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AiTaskAssistantWidgetsBundle.swift; sourceTree = "<group>"; };
 		D2000003 /* TaskWidgetData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskWidgetData.swift; sourceTree = "<group>"; };
 		D2000004 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -166,6 +168,7 @@
 				A2000016 /* Assets.xcassets */,
 				A2000009 /* Info.plist */,
 				A2000052 /* AiTaskAssistant.entitlements */,
+				A2000053 /* Localizable.xcstrings */,
 			);
 			path = AiTaskAssistant;
 			sourceTree = "<group>";
@@ -382,6 +385,13 @@
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
+				de,
+				es,
+				fr,
+				it,
+				nl,
+				pl,
+				pt,
 				Base,
 			);
 			mainGroup = A4000001 /* Root */;
@@ -415,6 +425,7 @@
 				A1000030 /* pl.json in Resources */,
 				A1000040 /* BricolageGrotesque.ttf in Resources */,
 				A1000041 /* Outfit.ttf in Resources */,
+				A1000047 /* Localizable.xcstrings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
