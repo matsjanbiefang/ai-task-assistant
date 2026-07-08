@@ -71,11 +71,22 @@ struct SettingsView: View {
                             }
                         )) {
                             ForEach(Self.presetLeadTimes, id: \.minutes) { preset in
-                                Text(preset.label).font(Theme.Typography.body(16)).tag(preset.minutes)
+                                // `preset.label` is a String property read at runtime, not a
+                                // literal at this call site — same LocalizedStringKey fix as
+                                // elsewhere, otherwise the translation never gets looked up.
+                                Text(LocalizedStringKey(preset.label)).font(Theme.Typography.body(16)).tag(preset.minutes)
                             }
-                            Text(isCustomLeadTime ? customLeadTimeLabel : "Custom…")
-                                .font(Theme.Typography.body(16))
-                                .tag(Self.customTag)
+                            if isCustomLeadTime {
+                                // Fully dynamic ("3 hours before") — not run through the String
+                                // Catalog, unlike the static "Custom…" placeholder below.
+                                Text(verbatim: customLeadTimeLabel)
+                                    .font(Theme.Typography.body(16))
+                                    .tag(Self.customTag)
+                            } else {
+                                Text("Custom…")
+                                    .font(Theme.Typography.body(16))
+                                    .tag(Self.customTag)
+                            }
                         } label: {
                             rowLabel("Remind me")
                         }
@@ -378,7 +389,9 @@ private struct CustomReminderView: View {
                     Stepper("Amount: \(amount)", value: $amount, in: 1...999)
                     Picker("Unit", selection: $unit) {
                         ForEach(Unit.allCases, id: \.self) { u in
-                            Text(u.rawValue).tag(u)
+                            // `u.rawValue` is a String property, not a literal — same
+                            // LocalizedStringKey fix as the reminder presets above.
+                            Text(LocalizedStringKey(u.rawValue)).tag(u)
                         }
                     }
                     .pickerStyle(.segmented)
