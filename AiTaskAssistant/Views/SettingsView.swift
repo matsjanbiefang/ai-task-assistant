@@ -50,15 +50,17 @@ struct SettingsView: View {
                         languageRow(language)
                     }
                 } header: {
-                    Text("Language")
+                    sectionHeader("Language")
                 } footer: {
-                    Text("Changes the app's language, and what TaskMind expects when recognizing dates, times, places, and categories in what you type or say.")
+                    sectionFooter("Changes the app's language, and what TaskMind expects when recognizing dates, times, places, and categories in what you type or say.")
                 }
 
                 Section {
-                    Toggle("Notifications", isOn: $notificationsEnabled)
+                    Toggle(isOn: $notificationsEnabled) {
+                        rowLabel("Notifications")
+                    }
                     if notificationsEnabled {
-                        Picker("Remind me", selection: Binding(
+                        Picker(selection: Binding(
                             get: { isCustomLeadTime ? Self.customTag : reminderLeadTimeMinutes },
                             set: { newValue in
                                 if newValue == Self.customTag {
@@ -69,16 +71,20 @@ struct SettingsView: View {
                             }
                         )) {
                             ForEach(Self.presetLeadTimes, id: \.minutes) { preset in
-                                Text(preset.label).tag(preset.minutes)
+                                Text(preset.label).font(Theme.Typography.body(16)).tag(preset.minutes)
                             }
-                            Text(isCustomLeadTime ? customLeadTimeLabel : "Custom…").tag(Self.customTag)
+                            Text(isCustomLeadTime ? customLeadTimeLabel : "Custom…")
+                                .font(Theme.Typography.body(16))
+                                .tag(Self.customTag)
+                        } label: {
+                            rowLabel("Remind me")
                         }
                     }
                 } header: {
-                    Text("Reminders")
+                    sectionHeader("Reminders")
                 } footer: {
                     if notificationsEnabled {
-                        Text("How far ahead of a task's due time to send a reminder.")
+                        sectionFooter("How far ahead of a task's due time to send a reminder.")
                     }
                 }
 
@@ -90,14 +96,14 @@ struct SettingsView: View {
                         Button {
                             showPaywall = true
                         } label: {
-                            Text("Upgrade to TaskMind Pro")
+                            rowLabel("Upgrade to TaskMind Pro")
                         }
                     }
                     Button {
                         restorePurchases()
                     } label: {
                         HStack {
-                            Text("Restore Purchases")
+                            rowLabel("Restore Purchases")
                             if isRestoringPurchases {
                                 Spacer()
                                 ProgressView()
@@ -106,71 +112,92 @@ struct SettingsView: View {
                     }
                     .disabled(isRestoringPurchases)
                 } header: {
-                    Text("Subscription")
+                    sectionHeader("Subscription")
                 } footer: {
                     if let restoreError {
-                        Text(restoreError)
+                        sectionFooter(restoreError)
                     } else if subscriptions.isPremium {
-                        Text("TaskMind Pro is active.")
+                        sectionFooter("TaskMind Pro is active.")
                     } else {
-                        Text("Free plan: up to 5 active tasks, no widgets.")
+                        sectionFooter("Free plan: up to 5 active tasks, no widgets.")
                     }
                 }
 
                 Section {
                     ForEach(customCategories) { category in
-                        Label(category.name, systemImage: category.iconName)
+                        Label {
+                            rowLabel(category.name)
+                        } icon: {
+                            Image(systemName: category.iconName)
+                        }
                     }
                     .onDelete(perform: deleteCustomCategories)
                     Button {
                         showAddCategory = true
                     } label: {
-                        Text("Add Category…")
+                        rowLabel("Add Category…")
                     }
                 } header: {
-                    Text("Categories")
+                    sectionHeader("Categories")
                 } footer: {
-                    Text("Custom categories appear alongside Work, Personal, Health, Shopping, Finance, and Other when categorizing a task.")
+                    sectionFooter("Custom categories appear alongside Work, Personal, Health, Shopping, Finance, and Other when categorizing a task.")
                 }
 
-                Section("About") {
-                    NavigationLink("Terms of Service") {
+                Section {
+                    NavigationLink {
                         LegalPlaceholderView(title: "Terms of Service")
+                    } label: {
+                        rowLabel("Terms of Service")
                     }
-                    NavigationLink("Privacy Policy") {
+                    NavigationLink {
                         LegalPlaceholderView(title: "Privacy Policy")
+                    } label: {
+                        rowLabel("Privacy Policy")
                     }
                     // Placeholder address (real-device feedback, 2026-07-04) — replace once a
                     // real support inbox exists.
                     Link(destination: URL(string: "mailto:support@taskmind.app")!) {
                         HStack {
-                            Text("Support")
-                                .foregroundStyle(Theme.Color.ink)
+                            rowLabel("Support")
                             Spacer()
                             Text("support@taskmind.app")
+                                .font(Theme.Typography.body(15))
                                 .foregroundStyle(Theme.Color.mutedGrey)
                         }
                     }
                     HStack {
-                        Text("Version")
-                            .foregroundStyle(Theme.Color.ink)
+                        rowLabel("Version")
                         Spacer()
                         Text(appVersionString)
+                            .font(Theme.Typography.body(15))
                             .foregroundStyle(Theme.Color.mutedGrey)
                     }
+                } header: {
+                    sectionHeader("About")
                 }
 
                 Section {
-                    Button("Delete all data", role: .destructive) {
+                    Button {
                         showDeleteAllConfirmation = true
+                    } label: {
+                        Text("Delete all data")
+                            .font(Theme.Typography.body(16))
                     }
+                    .foregroundStyle(.red)
                 } footer: {
-                    Text("Permanently deletes every task, note, and shopping list item. This can't be undone.")
+                    sectionFooter("Permanently deletes every task, note, and shopping list item. This can't be undone.")
                 }
             }
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
             .background(Theme.Color.paper)
+            // Real-device feedback: "the font in settings is not the font of the main app" and
+            // "sometimes underlined" — every row above now renders its label through `rowLabel`/
+            // `sectionHeader`/`sectionFooter` (Theme's Outfit font, ink/mutedGrey, no underline)
+            // instead of the default system font + default blue tint color, which is also what
+            // was silently picking up an underline on some devices (iOS underlines tinted/link-
+            // style text when the system "underline links" accessibility setting is on).
+            .tint(Theme.Color.limeDeep)
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .confirmationDialog(
@@ -217,8 +244,7 @@ struct SettingsView: View {
             primaryLanguageCode = language.rawValue
         } label: {
             HStack {
-                Text(language.displayName)
-                    .foregroundStyle(Theme.Color.ink)
+                rowLabel(language.displayName)
                 Spacer()
                 if isSelected {
                     Image(systemName: "checkmark")
@@ -226,6 +252,26 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+
+    // Consistent Outfit font + ink color for every row label in this screen, instead of the
+    // default system font/blue tint that made Settings look inconsistent with the rest of the app.
+    private func rowLabel(_ text: String) -> some View {
+        Text(text)
+            .font(Theme.Typography.body(16))
+            .foregroundStyle(Theme.Color.ink)
+    }
+
+    private func sectionHeader(_ text: String) -> some View {
+        Text(text)
+            .font(Theme.Typography.fieldLabel)
+            .foregroundStyle(Theme.Color.mutedGrey)
+    }
+
+    private func sectionFooter(_ text: String) -> some View {
+        Text(text)
+            .font(Theme.Typography.meta)
+            .foregroundStyle(Theme.Color.mutedGrey)
     }
 
     private var appVersionString: String {

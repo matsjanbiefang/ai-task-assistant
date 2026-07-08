@@ -9,6 +9,10 @@ struct TaskCardView: View {
     let task: TaskItem
     var onToggleCompletion: () -> Void
     var onTap: () -> Void
+    // Real-device feedback: the "Today" filtered list already says "Today" in its own header, so
+    // repeating the date on every card is redundant — only time matters there. Everywhere else
+    // (including "This week") both date and time should show when present.
+    var showDate: Bool = true
 
     @Query(sort: \CustomCategory.createdAt) private var customCategories: [CustomCategory]
 
@@ -57,9 +61,16 @@ struct TaskCardView: View {
             if let category = task.category, let icon = Theme.categoryIcon(category, custom: customCategories) {
                 Image(systemName: icon)
             }
-            if let date = task.dueDate, let endDate = task.dueEndDate {
-                // Real-device feedback (2026-07-03): a range renders as "Jul 9 – Jul 11".
-                Text("\(date.formatted(.dateTime.month(.abbreviated).day())) – \(endDate.formatted(.dateTime.month(.abbreviated).day()))")
+            // Real-device feedback: a single `dueDate` with no range previously showed nothing at
+            // all here — only a date *range* rendered. Now a plain single date shows too
+            // (skippable via `showDate` where the surrounding context already states the date).
+            if showDate, let date = task.dueDate {
+                if let endDate = task.dueEndDate {
+                    // Real-device feedback (2026-07-03): a range renders as "Jul 9 – Jul 11".
+                    Text("\(date.formatted(.dateTime.month(.abbreviated).day())) – \(endDate.formatted(.dateTime.month(.abbreviated).day()))")
+                } else {
+                    Text(date.formatted(.dateTime.month(.abbreviated).day()))
+                }
             }
             if let time = task.dueTime, let endTime = task.dueEndTime {
                 // Real-device feedback (2026-07-04): "Arzttermin 10 bis 12 Uhr" — a time range

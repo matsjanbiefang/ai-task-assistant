@@ -20,16 +20,17 @@ struct ShoppingListView: View {
                     LazyVStack(alignment: .leading, spacing: 2) {
                         ForEach(openItems) { item in row(for: item) }
                         if !checkedItems.isEmpty {
-                            HStack {
-                                Text("Checked")
-                                    .font(Theme.Typography.fieldLabel)
-                                    .foregroundStyle(Theme.Color.mutedGrey)
-                                Spacer()
-                                Button("Clear") { clearChecked() }
-                                    .buttonStyle(.paper)
-                            }
-                            .padding(.top, 20)
-                            .padding(.bottom, 4)
+                            // Real-device feedback: no manual "Clear" button anymore — checked
+                            // items are simply removed automatically the next time the app
+                            // launches (see `purgeCheckedShoppingItems` in ContentView), so they
+                            // stick around long enough to see what you've checked off this
+                            // session without needing to be tidied up by hand.
+                            Text("Checked")
+                                .font(Theme.Typography.fieldLabel)
+                                .foregroundStyle(Theme.Color.mutedGrey)
+                                .padding(.top, 20)
+                                .padding(.bottom, 4)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                             ForEach(checkedItems) { item in row(for: item) }
                         }
                         if items.isEmpty {
@@ -117,11 +118,6 @@ struct ShoppingListView: View {
         ShoppingItem.add([trimmed], context: modelContext)
         composeText = ""
         composeFocused = true
-    }
-
-    private func clearChecked() {
-        for item in checkedItems { modelContext.delete(item) }
-        try? modelContext.save()
     }
 }
 

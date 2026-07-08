@@ -1,5 +1,6 @@
 import SwiftUI
 import AppIntents
+import SwiftData
 
 // User feedback (2026-07-02): swiping left to reach the calendar/tasks view didn't feel right —
 // replaced with NoteView owning a swipe-up sheet (calendar icon in its bottom bar). ContentView no
@@ -12,6 +13,7 @@ struct ContentView: View {
     @State private var showTasks = false
     @AppStorage("primaryLanguageCode") private var primaryLanguageCode = ""
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+    @Environment(\.modelContext) private var modelContext
 
     var body: some View {
         if !hasCompletedOnboarding {
@@ -40,7 +42,30 @@ struct ContentView: View {
                 .task {
                     _ = await NotificationService.shared.requestPermission()
                 }
+                .onAppear {
+                    purgeCheckedShoppingItems()
+                    purgeCompletedUndatedTasks()
+                }
         }
+    }
+
+    // Real-device feedback: no manual "Clear" button in the shopping list anymore — checked-off
+    // items are simply removed the next time the app launches instead, so they're still visible
+    // for the rest of the current session.
+    private func purgeCheckedShoppingItems() {
+        let descriptor = FetchDescriptor<ShoppingItem>(predicate: #Predicate { $0.isCompleted })
+        guard let completed = try? modelContext.fetch(descriptor), !completed.isEmpty else { return }
+        for item in completed { modelContext.delete(item) }
+        try? modelContext.save()
+    }
+
+    // Real-device feedback: same treatment for the Tasklist's "Completed" section — only undated
+    // tasks (what Tasklist actually shows), so completed *dated* tasks stay as history in Week.
+    private func purgeCompletedUndatedTasks() {
+        let descriptor = FetchDescriptor<TaskItem>(predicate: #Predicate { $0.isCompleted && $0.dueDate == nil })
+        guard let completed = try? modelContext.fetch(descriptor), !completed.isEmpty else { return }
+        for task in completed { modelContext.delete(task) }
+        try? modelContext.save()
     }
 }
 

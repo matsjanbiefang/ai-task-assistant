@@ -69,7 +69,7 @@
   },
   "stopwords": {
     "words": ["bitte", "unbedingt", "noch", "mal", "auch noch", "ach ja", "übrigens", "nicht vergessen", "nich vergessen"],
-    "connectorWords": ["am", "um", "den", "der", "die", "das", "für", "zu", "zur"]
+    "connectorWords": ["am", "um", "den", "der", "die", "das", "für", "zu", "zur", "bis", "von"]
   },
   "fillerPhrases": [
     "ich muss noch", "ich muss unbedingt", "ich muss mal", "ich muss", "ich müsste",

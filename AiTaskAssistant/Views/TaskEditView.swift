@@ -111,81 +111,71 @@ struct TaskEditView: View {
 
     private var heroCard: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Button {
-                    try? modelContext.save()
-                    dismiss()
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(Theme.Color.ink)
-                        .frame(width: 40, height: 40)
-                        .background(SwiftUI.Color.white, in: Circle())
-                }
-                Spacer()
-                Button {
-                    isEditingTitle.toggle()
-                } label: {
-                    Image(systemName: "pencil")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Theme.Color.ink)
-                        .frame(width: 40, height: 40)
-                        .background(SwiftUI.Color.white, in: Circle())
-                }
+            Button {
+                try? modelContext.save()
+                dismiss()
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Theme.Color.ink)
+                    .frame(width: 40, height: 40)
+                    .background(SwiftUI.Color.white, in: Circle())
             }
             .buttonStyle(.plain)
 
+            // Real-device feedback: the separate pencil button didn't visibly do anything (it
+            // just swapped in a same-looking TextField) and the category chip up here duplicated
+            // the "Category" field row below — tapping the title itself now opens the same inline
+            // editor, and category is set from the one field row only.
             if isEditingTitle {
+                // Real-device feedback: a multi-line TextField (axis: .vertical) never fires
+                // onSubmit — the keyboard's checkmark/done key just inserts a newline instead of
+                // confirming, same class of bug already fixed for note lines/compose. Same fix:
+                // detect the inserted "\n", strip it, and treat that as "done" here too.
                 TextField("Title", text: $task.title, axis: .vertical)
                     .font(Theme.Typography.display(30, weight: .bold))
-                    .foregroundStyle(Theme.Color.ink)
+                    .foregroundStyle(task.isCompleted ? Theme.Color.mutedGrey : Theme.Color.ink)
                     .submitLabel(.done)
                     .onSubmit { isEditingTitle = false }
+                    .onChange(of: task.title) { _, newValue in
+                        guard newValue.contains("\n") else { return }
+                        task.title = newValue.replacingOccurrences(of: "\n", with: "")
+                        isEditingTitle = false
+                    }
             } else {
                 Text(task.title)
                     .font(Theme.Typography.display(30, weight: .bold))
-                    .foregroundStyle(Theme.Color.ink)
+                    .foregroundStyle(task.isCompleted ? Theme.Color.mutedGrey : Theme.Color.ink)
+                    .strikethrough(task.isCompleted)
                     .fixedSize(horizontal: false, vertical: true)
+                    .contentShape(Rectangle())
+                    .onTapGesture { isEditingTitle = true }
             }
-
-            categoryChipMenu
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            LinearGradient(
-                colors: [Theme.Color.skyPaleWash, Theme.Color.lime],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            ),
+            // Real-device feedback: "Mark as done" should visibly greyscale the whole detail
+            // screen, not just the list card — the hero gradient swaps to a flat grey wash and
+            // every field row below follows via `task.isCompleted`, all under one `withAnimation`
+            // in `toggleCompletion()` so the change reads as active/immediate.
+            Group {
+                if task.isCompleted {
+                    Theme.Color.hairline.opacity(0.6)
+                } else {
+                    LinearGradient(
+                        colors: [Theme.Color.skyPaleWash, Theme.Color.lime],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                }
+            },
             in: RoundedRectangle(cornerRadius: Theme.Metrics.heroCardRadius, style: .continuous)
         )
     }
 
     // §4: categories are told apart by icon shape, never hue — the chip mirrors that everywhere
     // else it appears (Notebook row, Week card meta line, Week legend).
-    private var categoryChipMenu: some View {
-        Menu {
-            categoryMenuItems
-        } label: {
-            if let category = task.category, let icon = Theme.categoryIcon(category, custom: customCategories) {
-                Label(Theme.categoryLabel(category), systemImage: icon)
-                    .font(Theme.Typography.fieldLabel)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(SwiftUI.Color.white, in: Capsule())
-                    .foregroundStyle(Theme.Color.ink)
-            } else {
-                Label("Add category", systemImage: "tag")
-                    .font(Theme.Typography.fieldLabel)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(SwiftUI.Color.white, in: Capsule())
-                    .foregroundStyle(Theme.Color.mutedGrey)
-            }
-        }
-    }
-
     // MARK: - Field rows
 
     private func fieldRow(label: String, value: String, isPlaceholder: Bool, action: @escaping () -> Void) -> some View {
@@ -197,12 +187,15 @@ struct TaskEditView: View {
                 Spacer()
                 Text(value)
                     .font(Theme.Typography.body(16, weight: .semibold))
-                    .foregroundStyle(isPlaceholder ? Theme.Color.mutedGrey : Theme.Color.ink)
+                    .foregroundStyle(isPlaceholder || task.isCompleted ? Theme.Color.mutedGrey : Theme.Color.ink)
                     .lineLimit(1)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 18)
-            .background(SwiftUI.Color.white, in: RoundedRectangle(cornerRadius: Theme.Metrics.fieldRowRadius, style: .continuous))
+            .background(
+                task.isCompleted ? Theme.Color.hairline.opacity(0.4) : SwiftUI.Color.white,
+                in: RoundedRectangle(cornerRadius: Theme.Metrics.fieldRowRadius, style: .continuous)
+            )
         }
         .buttonStyle(.plain)
     }
@@ -215,9 +208,9 @@ struct TaskEditView: View {
                 task.category = category.rawValue
             } label: {
                 if let icon = Theme.categoryIcon(category.rawValue) {
-                    Label(Theme.categoryLabel(category.rawValue), systemImage: icon)
+                    Label(LocalizedStringKey(Theme.categoryLabel(category.rawValue)), systemImage: icon)
                 } else {
-                    Text(Theme.categoryLabel(category.rawValue))
+                    Text(LocalizedStringKey(Theme.categoryLabel(category.rawValue)))
                 }
             }
         }
@@ -235,8 +228,8 @@ struct TaskEditView: View {
         }
     }
 
-    // Same options as `categoryChipMenu`, styled as a field row so tapping the whole row (not
-    // just the hero chip) also opens the category picker.
+    // Category picker as a field row — the hero card's own duplicate chip was removed (real-
+    // device feedback: it just repeated this same control).
     private var categoryFieldRow: some View {
         Menu {
             categoryMenuItems
@@ -246,13 +239,16 @@ struct TaskEditView: View {
                     .font(Theme.Typography.body(15))
                     .foregroundStyle(Theme.Color.mutedGrey)
                 Spacer()
-                Text(task.category.map(Theme.categoryLabel) ?? "")
+                Text(task.category.map { LocalizedStringKey(Theme.categoryLabel($0)) } ?? "")
                     .font(Theme.Typography.body(16, weight: .semibold))
-                    .foregroundStyle(task.category == nil ? Theme.Color.mutedGrey : Theme.Color.ink)
+                    .foregroundStyle(task.category == nil || task.isCompleted ? Theme.Color.mutedGrey : Theme.Color.ink)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 18)
-            .background(SwiftUI.Color.white, in: RoundedRectangle(cornerRadius: Theme.Metrics.fieldRowRadius, style: .continuous))
+            .background(
+                task.isCompleted ? Theme.Color.hairline.opacity(0.4) : SwiftUI.Color.white,
+                in: RoundedRectangle(cornerRadius: Theme.Metrics.fieldRowRadius, style: .continuous)
+            )
         }
         .buttonStyle(.plain)
     }
@@ -293,8 +289,17 @@ struct TaskEditView: View {
                 case .priority: priorityEditor
                 }
             }
+            // Real-device feedback: these editor sheets still looked like a stock white iOS Form
+            // instead of the app's paper/ink/lime look everywhere else. Full custom-row styling
+            // is a larger follow-up; this at least brings the background, tint, and title font
+            // in line rather than leaving system defaults untouched.
+            .scrollContentBackground(.hidden)
+            .background(Theme.Color.paper)
+            .tint(Theme.Color.limeDeep)
             .navigationTitle(titleForField(field))
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Theme.Color.paper, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
         }
         .presentationDetents([.medium])
         .presentationDragIndicator(.visible)
@@ -426,7 +431,9 @@ struct TaskEditView: View {
     // MARK: - Actions
 
     private func toggleCompletion() {
-        task.isCompleted.toggle()
+        withAnimation(.easeInOut(duration: 0.25)) {
+            task.isCompleted.toggle()
+        }
         try? modelContext.save()
         if task.isCompleted {
             modelContext.deleteLineIfAllTasksComplete(for: task)

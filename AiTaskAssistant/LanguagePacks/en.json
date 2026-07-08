@@ -78,7 +78,7 @@
   },
   "stopwords": {
     "words": ["oh and", "and also", "also", "please", "btw"],
-    "connectorWords": ["on", "at", "by", "for", "this", "next", "am"]
+    "connectorWords": ["on", "at", "by", "for", "this", "next", "am", "to", "from", "until"]
   },
   "fillerPhrases": [
     "i need to", "i have to", "i must", "i should", "i want to", "i would like to",

@@ -9,16 +9,18 @@ import RevenueCat
 // - Language is the first page and starts with NOTHING selected (Continue disabled until a
 //   choice is made) — every later page's copy, including the illustrative examples and the Siri
 //   walkthrough, is localized live against whatever gets picked, via `OnboardingCopy` below.
-// - The notifications page is self-contained (own "Allow Notifications" + "Maybe later" actions,
-//   matching a reference app's layout) rather than driven by the shared Continue bar — the shared
-//   bar is hidden on that page. Either action advances straight to a shared final page.
-// - A paywall page (previously missing from onboarding entirely) sits before notifications, with
-//   its own "Start Free Trial" action and a "Maybe Later" skip via the shared Continue button.
+// - Notifications now come before the paywall. The notifications page is self-contained (own
+//   "Allow Notifications" + "Maybe later" actions, matching a reference app's layout) rather than
+//   driven by the shared Continue bar — the shared bar is hidden on that page.
+// - The paywall page has its own "Start Free Trial" action and a "Maybe Later" skip via the
+//   shared Continue button.
+// - A custom top progress bar (matching a reference app's look) replaces TabView's default
+//   bottom page dots, which were visually overlapping the notifications page's own buttons.
 struct OnboardingFlowView: View {
     var onFinish: (SupportedLanguage) -> Void
 
     private enum Page: Int, CaseIterable {
-        case language, welcome, notes, examples, speech, siri, widgets, paywall, notifications, final
+        case language, welcome, notes, examples, speech, siri, widgets, notifications, paywall, final
     }
 
     @State private var page: Page = .language
@@ -28,6 +30,7 @@ struct OnboardingFlowView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            progressBar
             TabView(selection: $page) {
                 OnboardingLanguageView(embedded: true, selected: $selectedLanguage)
                     .tag(Page.language)
@@ -37,18 +40,30 @@ struct OnboardingFlowView: View {
                 SpeechDemoPage(language: language).tag(Page.speech)
                 SiriPage(language: language).tag(Page.siri)
                 WidgetsPage(language: language).tag(Page.widgets)
-                OnboardingPaywallPage(language: language, onAdvance: { advance() }).tag(Page.paywall)
                 NotificationsPage(language: language, onAdvance: { advance() }).tag(Page.notifications)
+                OnboardingPaywallPage(language: language, onAdvance: { advance() }).tag(Page.paywall)
                 FinalPage(language: language).tag(Page.final)
             }
-            .tabViewStyle(.page(indexDisplayMode: .always))
-            .indexViewStyle(.page(backgroundDisplayMode: .always))
+            .tabViewStyle(.page(indexDisplayMode: .never))
 
             if page != .notifications {
                 continueButton
             }
         }
         .background(Theme.Color.paper)
+    }
+
+    private var progressBar: some View {
+        HStack(spacing: 6) {
+            ForEach(Page.allCases, id: \.self) { step in
+                Capsule()
+                    .fill(step.rawValue <= page.rawValue ? Theme.Color.lime : Theme.Color.hairline)
+                    .frame(height: 4)
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 12)
+        .animation(.easeInOut(duration: 0.25), value: page)
     }
 
     private var isLastPage: Bool { page == .final }

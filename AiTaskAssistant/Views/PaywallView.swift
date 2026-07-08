@@ -174,16 +174,20 @@ struct PaywallView: View {
             .multilineTextAlignment(.center)
     }
 
+    // Real-device feedback: match the reference's exact line grouping — Restore Purchase on its
+    // own line, Privacy Policy / Terms of Use together underneath.
     private var legalLinks: some View {
-        HStack(spacing: 6) {
-            Spacer()
+        VStack(spacing: 8) {
             Button("Restore Purchases") { restore() }
-            Text("·").foregroundStyle(Theme.Color.mutedGrey)
-            Button("Privacy Policy") { legalPage = .privacy }
-            Text("·").foregroundStyle(Theme.Color.mutedGrey)
-            Button("Terms of Use") { legalPage = .terms }
-            Spacer()
+            HStack(spacing: 6) {
+                Button("Privacy Policy") { legalPage = .privacy }
+                    .underline()
+                Text("·")
+                Button("Terms of Use") { legalPage = .terms }
+                    .underline()
+            }
         }
+        .frame(maxWidth: .infinity)
         .font(Theme.Typography.meta)
         .foregroundStyle(Theme.Color.mutedGrey)
         .buttonStyle(.plain)

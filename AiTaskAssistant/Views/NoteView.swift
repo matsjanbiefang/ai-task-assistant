@@ -20,6 +20,7 @@ struct NoteView: View {
     @AppStorage("primaryLanguageCode") private var primaryLanguageCode = "en"
     @Query(sort: \NoteLine.order) private var lines: [NoteLine]
     @Query private var allTasks: [TaskItem]
+    @Query private var allShoppingItems: [ShoppingItem]
     @Query(sort: \CustomCategory.createdAt) private var customCategories: [CustomCategory]
 
     @State private var editingTexts: [UUID: String] = [:]
@@ -33,6 +34,10 @@ struct NoteView: View {
     @State private var showSettings = false
     @State private var showTasklist = false
     @State private var showPaywall = false
+    // Real-device feedback: smart filter chips — "all notes" is the default (every category
+    // active); tapping a chip greys it out and hides lines whose only outcome matches it. A line
+    // matching ANY active category (or nothing yet, e.g. still being typed) stays visible.
+    @State private var activeFilters: Set<NoteFilterCategory> = Set(NoteFilterCategory.allCases)
     @FocusState private var focusedTarget: FocusTarget?
 
     private let extraction = RuleBasedExtractionService.shared
@@ -40,6 +45,10 @@ struct NoteView: View {
     private enum FocusTarget: Hashable {
         case line(UUID)
         case compose
+    }
+
+    private enum NoteFilterCategory: CaseIterable {
+        case calendar, tasks, shopping
     }
 
     private var isRecording: Bool { speech.state == .recording }
@@ -58,10 +67,11 @@ struct NoteView: View {
     var body: some View {
         VStack(spacing: 0) {
             topBar
+            filterBar
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 2) {
-                        ForEach(lines) { line in
+                        ForEach(filteredLines) { line in
                             row(for: line)
                         }
                         composeRow
@@ -237,11 +247,14 @@ struct NoteView: View {
 
             Button {
                 let tasksForLine = allTasks.filter { $0.sourceLineID == line.id }
+                let shoppingForLine = allShoppingItems.filter { $0.sourceLineID == line.id }
                 if tasksForLine.count == 1 {
                     editTask = tasksForLine[0]
-                } else {
+                } else if !tasksForLine.isEmpty {
                     // several tasks came out of this line — no single editor to jump to
                     showTasks = true
+                } else if !shoppingForLine.isEmpty {
+                    showShoppingList = true
                 }
             } label: {
                 statusIcon(for: line)
@@ -308,8 +321,10 @@ struct NoteView: View {
 
     private func isLineCompleted(_ line: NoteLine) -> Bool {
         let tasksForLine = allTasks.filter { $0.sourceLineID == line.id }
-        guard !tasksForLine.isEmpty else { return false }
-        return tasksForLine.allSatisfy(\.isCompleted)
+        if !tasksForLine.isEmpty { return tasksForLine.allSatisfy(\.isCompleted) }
+        let shoppingForLine = allShoppingItems.filter { $0.sourceLineID == line.id }
+        guard !shoppingForLine.isEmpty else { return false }
+        return shoppingForLine.allSatisfy(\.isCompleted)
     }
 
     // §6 Notebook: "on the right, small neutral icons appear only for fields the parser actually
@@ -319,10 +334,21 @@ struct NoteView: View {
     @ViewBuilder
     private func statusIcon(for line: NoteLine) -> some View {
         let tasksForLine = allTasks.filter { $0.sourceLineID == line.id }
+        let shoppingForLine = allShoppingItems.filter { $0.sourceLineID == line.id }
         if line.hasLowConfidence {
             Image(systemName: "questionmark.circle")
                 .font(.caption2)
                 .foregroundStyle(.orange)
+        } else if !shoppingForLine.isEmpty {
+            HStack(spacing: 4) {
+                Image(systemName: "cart.fill")
+                if shoppingForLine.count > 1 {
+                    Text("\(shoppingForLine.count)")
+                        .font(.caption2.bold())
+                }
+            }
+            .font(.caption2)
+            .foregroundStyle(Theme.Color.mutedGrey)
         } else if !tasksForLine.isEmpty {
             HStack(spacing: 4) {
                 // Real-device feedback: a plain task with nothing else detected showed no icon at
@@ -373,6 +399,58 @@ struct NoteView: View {
         case "medium": return .orange
         default: return .secondary
         }
+    }
+
+    // MARK: - Filtering
+
+    private var filteredLines: [NoteLine] {
+        lines.filter(matchesActiveFilters)
+    }
+
+    private func matchesActiveFilters(_ line: NoteLine) -> Bool {
+        let tasksForLine = allTasks.filter { $0.sourceLineID == line.id }
+        let shoppingForLine = allShoppingItems.filter { $0.sourceLineID == line.id }
+        // Not parsed into anything yet (still being typed, or nothing detected) — always show.
+        guard !tasksForLine.isEmpty || !shoppingForLine.isEmpty else { return true }
+        if !shoppingForLine.isEmpty && activeFilters.contains(.shopping) { return true }
+        if tasksForLine.contains(where: { $0.dueDate != nil }) && activeFilters.contains(.calendar) { return true }
+        if tasksForLine.contains(where: { $0.dueDate == nil }) && activeFilters.contains(.tasks) { return true }
+        return false
+    }
+
+    private var filterBar: some View {
+        HStack(spacing: 8) {
+            filterChip(.calendar, label: "Calendar", icon: "calendar")
+            filterChip(.tasks, label: "Tasks", icon: "checkmark.circle")
+            filterChip(.shopping, label: "Shopping", icon: "cart")
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 8)
+    }
+
+    private func filterChip(_ category: NoteFilterCategory, label: String, icon: String) -> some View {
+        let isActive = activeFilters.contains(category)
+        return Button {
+            if isActive {
+                activeFilters.remove(category)
+            } else {
+                activeFilters.insert(category)
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                Text(label)
+            }
+            .font(Theme.Typography.meta.weight(.medium))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(
+                Capsule().fill(isActive ? Theme.Color.lime.opacity(0.35) : Theme.Color.hairline.opacity(0.3))
+            )
+            .foregroundStyle(isActive ? Theme.Color.ink : Theme.Color.mutedGrey.opacity(0.5))
+        }
+        .buttonStyle(.plain)
     }
 
     // §6 Notebook: "Top bar: calendar and shopping-list icons grouped in the center,
@@ -543,14 +621,6 @@ struct NoteView: View {
     private func commitCompose() async {
         let trimmed = composeText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        // Real-device feedback (2026-07-04): "add milk to shopping list" routes straight into the
-        // shopping list instead of becoming a normal note line/task — checked before anything
-        // else touches `trimmed`.
-        if let items = extraction.shoppingListItems(in: trimmed, primaryLanguageCode: primaryLanguageCode) {
-            ShoppingItem.add(items, context: modelContext)
-            composeText = ""
-            return
-        }
         let nextOrder = (lines.map(\.order).max() ?? -1) + 1
         let newLine = NoteLine(text: trimmed, order: nextOrder)
         modelContext.insert(newLine)
@@ -574,10 +644,6 @@ struct NoteView: View {
         }
         var nextOrder = (lines.map(\.order).max() ?? -1) + 1
         for segment in segments {
-            if let items = extraction.shoppingListItems(in: segment, primaryLanguageCode: primaryLanguageCode) {
-                ShoppingItem.add(items, context: modelContext)
-                continue
-            }
             let newLine = NoteLine(text: segment, order: nextOrder)
             nextOrder += 1
             modelContext.insert(newLine)
@@ -597,17 +663,28 @@ struct NoteView: View {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
             await deleteLine(line)
-        } else if let items = extraction.shoppingListItems(in: trimmed, primaryLanguageCode: primaryLanguageCode) {
-            ShoppingItem.add(items, context: modelContext)
-            await deleteLine(line)
         } else {
             line.text = trimmed
             await reparse(line)
         }
     }
 
+    // Real-device feedback: "when I put something on the shopping list, still leave it in
+    // Notes" — a shopping-list line used to be diverted away entirely (never became a NoteLine,
+    // or got deleted on re-edit). It's now handled as one of the two things a line can resolve
+    // to, same as the task-extraction path below, so the line itself always stays visible.
     private func reparse(_ line: NoteLine) async {
         await removeTasks(forLineID: line.id)
+        removeShoppingItems(forLineID: line.id)
+
+        if let items = extraction.shoppingListItems(in: line.text, primaryLanguageCode: primaryLanguageCode) {
+            ShoppingItem.add(items, context: modelContext, sourceLineID: line.id)
+            line.taskCount = 0
+            line.hasLowConfidence = false
+            try? modelContext.save()
+            WidgetCenter.shared.reloadAllTimelines()
+            return
+        }
 
         let extracted = extraction.extractLine(line.text, primaryLanguageCode: primaryLanguageCode)
         line.taskCount = extracted.count
@@ -665,9 +742,16 @@ struct NoteView: View {
 
     private func deleteLine(_ line: NoteLine) async {
         await removeTasks(forLineID: line.id)
+        removeShoppingItems(forLineID: line.id)
         modelContext.delete(line)
         try? modelContext.save()
         await refreshBadge()
+    }
+
+    private func removeShoppingItems(forLineID lineID: UUID) {
+        let descriptor = FetchDescriptor<ShoppingItem>(predicate: #Predicate { $0.sourceLineID == lineID })
+        guard let items = try? modelContext.fetch(descriptor) else { return }
+        for item in items { modelContext.delete(item) }
     }
 
     private func removeTasks(forLineID lineID: UUID) async {

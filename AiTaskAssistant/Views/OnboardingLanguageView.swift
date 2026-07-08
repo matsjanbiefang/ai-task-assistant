@@ -20,12 +20,22 @@ struct OnboardingLanguageView: View {
 
     @State private var internalSelected: SupportedLanguage?
     // Real-device feedback: "select your language" header cycling through each selectable
-    // language's own translation of that phrase, 0.8s per language, looping — a quick, friendly
-    // way to signal "pick one of these" before the user has decided which language they read.
+    // language's own translation of that phrase, looping until a language is actually tapped —
+    // at which point it freezes on that language's own phrase instead of continuing to cycle.
+    // Slowed from an initial 0.8s (read as jittery) to 1.6s.
     @State private var headerIndex = 0
 
     private var currentSelection: SupportedLanguage? {
         selected?.wrappedValue ?? internalSelected
+    }
+
+    private var headerText: String {
+        if let currentSelection {
+            return Self.selectLanguagePhraseByCode[currentSelection.rawValue] ?? cyclingPhrases.first ?? "Select your language"
+        }
+        let phrases = cyclingPhrases
+        guard !phrases.isEmpty else { return "Select your language" }
+        return phrases[headerIndex % phrases.count]
     }
 
     // Real-device feedback (2026-07-04): "reduce note taking language to the supported
@@ -38,12 +48,20 @@ struct OnboardingLanguageView: View {
             .sorted { $0.displayName < $1.displayName }
     }
 
-    private static let selectLanguagePhrases: [String] = [
-        "Select your language", "Sprache auswählen", "Selecciona tu idioma", "Choisis ta langue",
-        "Seleziona la tua lingua", "Kies je taal", "Wybierz swój język", "Seleciona o teu idioma",
+    // Ordered to match `sortedLanguages` (alphabetical by each language's own displayName), so
+    // once a language is picked the frozen header can show that exact language's own phrase by
+    // looking up its position in this same list.
+    private static let selectLanguagePhraseByCode: [String: String] = [
+        "en": "Select your language", "de": "Sprache auswählen", "es": "Selecciona tu idioma",
+        "fr": "Choisis ta langue", "it": "Seleziona la tua lingua", "nl": "Kies je taal",
+        "pl": "Wybierz swój język", "pt": "Seleciona o teu idioma",
     ]
 
-    private let headerTimer = Timer.publish(every: 0.8, on: .main, in: .common).autoconnect()
+    private var cyclingPhrases: [String] {
+        sortedLanguages.map { Self.selectLanguagePhraseByCode[$0.rawValue] ?? "Select your language" }
+    }
+
+    private let headerTimer = Timer.publish(every: 1.6, on: .main, in: .common).autoconnect()
 
     var body: some View {
         Group {
@@ -68,15 +86,18 @@ struct OnboardingLanguageView: View {
             ScrollView {
                 VStack(spacing: 20) {
                     Spacer(minLength: 0)
-                    Text(Self.selectLanguagePhrases[headerIndex])
+                    Text(headerText)
                         .font(Theme.Typography.screenTitle)
                         .foregroundStyle(Theme.Color.ink)
                         .contentTransition(.opacity)
-                        .id(headerIndex)
+                        .id(headerText)
                         .transition(.opacity)
                         .onReceive(headerTimer) { _ in
+                            // Once a language is selected, stop cycling and show only its own
+                            // phrase — handled by `headerText` below reading `currentSelection`.
+                            guard currentSelection == nil else { return }
                             withAnimation(.easeInOut(duration: 0.3)) {
-                                headerIndex = (headerIndex + 1) % Self.selectLanguagePhrases.count
+                                headerIndex = (headerIndex + 1) % max(cyclingPhrases.count, 1)
                             }
                         }
                     VStack(spacing: 10) {

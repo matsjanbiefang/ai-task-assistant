@@ -155,13 +155,13 @@ struct WeekView: View {
             EmptyStateView(icon: "checkmark.circle", message: "Nothing here")
         } else {
             VStack(spacing: 8) {
-                ForEach(items) { task in card(for: task) }
+                ForEach(items) { task in card(for: task, showDate: filter != .today) }
             }
         }
     }
 
-    private func card(for task: TaskItem) -> TaskCardView {
-        TaskCardView(task: task, onToggleCompletion: { toggleCompletion(task) }, onTap: { editingTask = task })
+    private func card(for task: TaskItem, showDate: Bool = true) -> TaskCardView {
+        TaskCardView(task: task, onToggleCompletion: { toggleCompletion(task) }, onTap: { editingTask = task }, showDate: showDate)
     }
 
     // MARK: - Actions
