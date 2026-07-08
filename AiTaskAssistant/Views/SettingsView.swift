@@ -10,10 +10,16 @@ struct SettingsView: View {
     @AppStorage("primaryLanguageCode") private var primaryLanguageCode = "en"
     @AppStorage("notificationsEnabled") private var notificationsEnabled = true
     @AppStorage("reminderLeadTimeMinutes") private var reminderLeadTimeMinutes = 15
+    // Phase 2 (PostHog): read by AnalyticsService before sending any event. Default on, same as
+    // notifications — an explicit opt-out rather than an opt-in.
+    @AppStorage("shareAnalyticsEnabled") private var shareAnalyticsEnabled = true
 
     @Environment(\.modelContext) private var modelContext
+    @ObservedObject private var subscriptions = SubscriptionService.shared
     @State private var showDeleteAllConfirmation = false
     @State private var showCustomReminderEditor = false
+    @State private var isRestoringPurchases = false
+    @State private var restoreError: String?
 
     // Real-device feedback: "reduce note taking language to the supported languages" — see
     // `SupportedLanguage.isSupportedByLanguagePack`'s doc comment for why the other 16 of 24 EU
@@ -76,6 +82,37 @@ struct SettingsView: View {
                     }
                 }
 
+                Section {
+                    Button {
+                        restorePurchases()
+                    } label: {
+                        HStack {
+                            Text("Restore Purchases")
+                            if isRestoringPurchases {
+                                Spacer()
+                                ProgressView()
+                            }
+                        }
+                    }
+                    .disabled(isRestoringPurchases)
+                } header: {
+                    Text("Subscription")
+                } footer: {
+                    if let restoreError {
+                        Text(restoreError)
+                    } else if subscriptions.isPremium {
+                        Text("TaskMind Pro is active.")
+                    } else {
+                        Text("Free plan: up to 5 active tasks, no widgets.")
+                    }
+                }
+
+                Section {
+                    Toggle("Share Analytics", isOn: $shareAnalyticsEnabled)
+                } footer: {
+                    Text("Helps us understand which features are used, without ever sharing your task or note content. You can turn this off anytime.")
+                }
+
                 Section("About") {
                     NavigationLink("Terms of Service") {
                         LegalPlaceholderView(title: "Terms of Service")
@@ -93,6 +130,13 @@ struct SettingsView: View {
                             Text("support@taskmind.app")
                                 .foregroundStyle(Theme.Color.mutedGrey)
                         }
+                    }
+                    HStack {
+                        Text("Version")
+                            .foregroundStyle(Theme.Color.ink)
+                        Spacer()
+                        Text(appVersionString)
+                            .foregroundStyle(Theme.Color.mutedGrey)
                     }
                 }
 
@@ -156,6 +200,25 @@ struct SettingsView: View {
                         .foregroundStyle(Theme.Color.limeDeep)
                 }
             }
+        }
+    }
+
+    private var appVersionString: String {
+        let shortVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"
+        return "\(shortVersion) (\(build))"
+    }
+
+    private func restorePurchases() {
+        isRestoringPurchases = true
+        restoreError = nil
+        Task {
+            do {
+                try await subscriptions.restorePurchases()
+            } catch {
+                restoreError = error.localizedDescription
+            }
+            isRestoringPurchases = false
         }
     }
 
