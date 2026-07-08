@@ -9,10 +9,9 @@ import RevenueCat
 // - Language is the first page and starts with NOTHING selected (Continue disabled until a
 //   choice is made) — every later page's copy, including the illustrative examples and the Siri
 //   walkthrough, is localized live against whatever gets picked, via `OnboardingCopy` below.
-// - Notification permission is requested when tapping the shared Continue button on that page,
-//   then the flow always advances to a shared final page regardless of grant/deny — the
-//   permission page's own copy explains both "why this helps" and "you can turn it on later",
-//   folded into one screen rather than split across two.
+// - The notifications page is self-contained (own "Allow Notifications" + "Maybe later" actions,
+//   matching a reference app's layout) rather than driven by the shared Continue bar — the shared
+//   bar is hidden on that page. Either action advances straight to a shared final page.
 // - A paywall page (previously missing from onboarding entirely) sits before notifications, with
 //   its own "Start Free Trial" action and a "Maybe Later" skip via the shared Continue button.
 struct OnboardingFlowView: View {
@@ -39,13 +38,15 @@ struct OnboardingFlowView: View {
                 SiriPage(language: language).tag(Page.siri)
                 WidgetsPage(language: language).tag(Page.widgets)
                 OnboardingPaywallPage(language: language, onAdvance: { advance() }).tag(Page.paywall)
-                NotificationsPage(language: language).tag(Page.notifications)
+                NotificationsPage(language: language, onAdvance: { advance() }).tag(Page.notifications)
                 FinalPage(language: language).tag(Page.final)
             }
             .tabViewStyle(.page(indexDisplayMode: .always))
             .indexViewStyle(.page(backgroundDisplayMode: .always))
 
-            continueButton
+            if page != .notifications {
+                continueButton
+            }
         }
         .background(Theme.Color.paper)
     }
@@ -75,9 +76,6 @@ struct OnboardingFlowView: View {
     }
 
     private func advance() {
-        if page == .notifications {
-            Task { _ = await NotificationService.shared.requestPermission() }
-        }
         if isLastPage {
             onFinish(language)
         } else if let next = Page(rawValue: page.rawValue + 1) {
@@ -345,11 +343,78 @@ private struct OnboardingPaywallPage: View {
     }
 }
 
+// Real-device feedback: rebuilt to match a reference app's permission-priming screen — icon in a
+// soft circular backdrop, an info card stating the concrete reminder behavior, then its own
+// "Allow Notifications" / "Maybe later" actions instead of relying on the shared Continue bar
+// (which is hidden on this page). Keeps TaskMind's existing bell.badge.fill glyph rather than the
+// reference's bell emoji.
 private struct NotificationsPage: View {
     let language: SupportedLanguage
+    let onAdvance: () -> Void
+
     var body: some View {
         let copy = OnboardingCopy.text(for: .notifications, in: language)
-        OnboardingPageLayout(icon: "bell.badge.fill", title: copy.title, subtitle: copy.subtitle) { EmptyView() }
+        let facts = OnboardingCopy.notificationFacts(language)
+        GeometryReader { proxy in
+            ScrollView {
+                VStack(spacing: 20) {
+                    Spacer(minLength: 0)
+                    Image(systemName: "bell.badge.fill")
+                        .font(.system(size: 36))
+                        .foregroundStyle(Theme.Color.limeDeep)
+                        .frame(width: 84, height: 84)
+                        .background(Circle().fill(Theme.Color.lime.opacity(0.25)))
+                    Text(copy.title)
+                        .font(Theme.Typography.screenTitle)
+                        .foregroundStyle(Theme.Color.ink)
+                        .multilineTextAlignment(.center)
+                    Text(copy.subtitle)
+                        .font(Theme.Typography.body(15))
+                        .foregroundStyle(Theme.Color.mutedGrey)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(facts, id: \.self) { fact in
+                            Text(fact)
+                                .font(Theme.Typography.body(14))
+                                .foregroundStyle(Theme.Color.ink)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(16)
+                    .background(Theme.Color.hairline.opacity(0.3))
+                    .clipShape(RoundedRectangle(cornerRadius: Theme.Metrics.cardRadius))
+                    .padding(.horizontal, 32)
+                    Spacer(minLength: 0)
+                    VStack(spacing: 14) {
+                        Button {
+                            Task {
+                                _ = await NotificationService.shared.requestPermission()
+                                onAdvance()
+                            }
+                        } label: {
+                            Text(OnboardingCopy.allowNotifications(language))
+                                .font(Theme.Typography.body(16, weight: .semibold))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(Theme.Color.lime)
+                        .foregroundStyle(Theme.Color.ink)
+
+                        Button(OnboardingCopy.maybeLater(language)) {
+                            onAdvance()
+                        }
+                        .font(Theme.Typography.body(14))
+                        .foregroundStyle(Theme.Color.mutedGrey)
+                    }
+                    .padding(.horizontal, 32)
+                }
+                .frame(maxWidth: .infinity)
+                .frame(minHeight: proxy.size.height)
+                .padding(.vertical, 24)
+            }
+        }
     }
 }
 
@@ -423,6 +488,14 @@ private enum OnboardingCopy {
         siriStepsTable[language.rawValue] ?? siriStepsTable["en"]!
     }
 
+    static func notificationFacts(_ language: SupportedLanguage) -> [String] {
+        notificationFactsTable[language.rawValue] ?? notificationFactsTable["en"]!
+    }
+
+    static func allowNotifications(_ language: SupportedLanguage) -> String {
+        allowNotificationsLabels[language.rawValue] ?? allowNotificationsLabels["en"]!
+    }
+
     static func continueLabel(_ language: SupportedLanguage) -> String {
         continueLabels[language.rawValue] ?? continueLabels["en"]!
     }
@@ -458,6 +531,23 @@ private enum OnboardingCopy {
         "en": "Start Free Trial", "de": "Kostenlose Testphase starten", "es": "Iniciar prueba gratuita",
         "fr": "Démarrer l'essai gratuit", "it": "Inizia la prova gratuita", "nl": "Start gratis proefperiode",
         "pl": "Rozpocznij bezpłatny okres próbny", "pt": "Iniciar teste gratuito",
+    ]
+
+    private static let allowNotificationsLabels: [String: String] = [
+        "en": "Allow Notifications", "de": "Benachrichtigungen erlauben", "es": "Permitir notificaciones",
+        "fr": "Autoriser les notifications", "it": "Consenti notifiche", "nl": "Meldingen toestaan",
+        "pl": "Zezwól na powiadomienia", "pt": "Permitir notificações",
+    ]
+
+    private static let notificationFactsTable: [String: [String]] = [
+        "en": ["Reminders only for tasks with a due date.", "Default lead time: 15 minutes before (adjustable in Settings)."],
+        "de": ["Erinnerungen nur für Aufgaben mit einem Fälligkeitsdatum.", "Standard-Vorlaufzeit: 15 Minuten vorher (in den Einstellungen anpassbar)."],
+        "es": ["Recordatorios solo para tareas con fecha límite.", "Tiempo de antelación predeterminado: 15 minutos antes (ajustable en Ajustes)."],
+        "fr": ["Rappels uniquement pour les tâches ayant une échéance.", "Délai par défaut : 15 minutes avant (modifiable dans les réglages)."],
+        "it": ["Promemoria solo per le attività con una scadenza.", "Anticipo predefinito: 15 minuti prima (modificabile nelle Impostazioni)."],
+        "nl": ["Herinneringen alleen voor taken met een vervaldatum.", "Standaard vooraankondiging: 15 minuten van tevoren (aanpasbaar in Instellingen)."],
+        "pl": ["Przypomnienia tylko dla zadań z terminem.", "Domyślny czas wyprzedzenia: 15 minut wcześniej (można zmienić w Ustawieniach)."],
+        "pt": ["Lembretes apenas para tarefas com prazo.", "Antecedência predefinida: 15 minutos antes (ajustável nas Definições)."],
     ]
 
     private static let notesExamples: [String: (input: String, result: String)] = [
@@ -597,14 +687,14 @@ private enum OnboardingCopy {
             "pt": Copy(title: "Desbloqueia o TaskMind Pro", subtitle: "Tarefas ilimitadas e todos os widgets, com um teste gratuito de 1 semana."),
         ],
         .notifications: [
-            "en": Copy(title: "Stay on top of due dates", subtitle: "TaskMind can remind you before a task is due. If you'd rather not right now, you can always enable notifications later in Settings."),
-            "de": Copy(title: "Behalte Fälligkeiten im Blick", subtitle: "TaskMind kann dich erinnern, bevor eine Aufgabe fällig ist. Falls du das gerade nicht möchtest, kannst du Benachrichtigungen jederzeit später in den Einstellungen aktivieren."),
-            "es": Copy(title: "Mantente al tanto de tus fechas límite", subtitle: "TaskMind puede recordarte antes de que venza una tarea. Si prefieres no hacerlo ahora, siempre puedes activar las notificaciones más tarde en Ajustes."),
-            "fr": Copy(title: "Reste à jour sur tes échéances", subtitle: "TaskMind peut te rappeler avant qu'une tâche arrive à échéance. Si tu préfères ne pas le faire maintenant, tu peux toujours activer les notifications plus tard dans les réglages."),
-            "it": Copy(title: "Resta aggiornato sulle scadenze", subtitle: "TaskMind può ricordarti prima che un'attività scada. Se preferisci non farlo ora, puoi sempre attivare le notifiche più tardi nelle Impostazioni."),
-            "nl": Copy(title: "Blijf op de hoogte van deadlines", subtitle: "TaskMind kan je herinneren voordat een taak vervalt. Als je dit nu liever niet doet, kun je meldingen altijd later inschakelen in Instellingen."),
-            "pl": Copy(title: "Bądź na bieżąco z terminami", subtitle: "TaskMind może przypomnieć Ci, zanim zadanie stanie się wymagalne. Jeśli wolisz nie robić tego teraz, zawsze możesz włączyć powiadomienia później w Ustawieniach."),
-            "pt": Copy(title: "Fica por dentro dos prazos", subtitle: "O TaskMind pode lembrar-te antes de uma tarefa vencer. Se preferires não o fazer agora, podes sempre ativar as notificações mais tarde nas Definições."),
+            "en": Copy(title: "Stay on top of your tasks", subtitle: "Get a reminder before a task is due, so nothing slips through."),
+            "de": Copy(title: "Bleib bei deinen Aufgaben am Ball", subtitle: "Erhalte eine Erinnerung, bevor eine Aufgabe fällig ist, damit nichts durchrutscht."),
+            "es": Copy(title: "Mantente al día con tus tareas", subtitle: "Recibe un recordatorio antes de que venza una tarea, para que nada se te escape."),
+            "fr": Copy(title: "Reste à jour avec tes tâches", subtitle: "Reçois un rappel avant qu'une tâche arrive à échéance, pour que rien ne t'échappe."),
+            "it": Copy(title: "Resta aggiornato sulle tue attività", subtitle: "Ricevi un promemoria prima che un'attività scada, così non ti sfugge nulla."),
+            "nl": Copy(title: "Blijf op de hoogte van je taken", subtitle: "Ontvang een herinnering voordat een taak vervalt, zodat niets je ontgaat."),
+            "pl": Copy(title: "Bądź na bieżąco ze swoimi zadaniami", subtitle: "Otrzymuj przypomnienie, zanim zadanie stanie się wymagalne, aby nic Ci nie umknęło."),
+            "pt": Copy(title: "Fica por dentro das tuas tarefas", subtitle: "Recebe um lembrete antes de uma tarefa vencer, para que nada te escape."),
         ],
         .final: [
             "en": Copy(title: "You're all set", subtitle: "Start capturing tasks the way you think — just write, and TaskMind handles the rest."),
