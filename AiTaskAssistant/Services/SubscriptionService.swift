@@ -1,5 +1,6 @@
 import Foundation
 import RevenueCat
+import WidgetKit
 
 // Phase 1 (RevenueCat): single source of truth for entitlement state and the free-tier task cap.
 // Mirrors NotificationService's singleton-service pattern. Entitlement identifier ("premium") and
@@ -59,8 +60,15 @@ final class SubscriptionService: NSObject, ObservableObject {
     }
 
     private func apply(_ info: CustomerInfo) {
+        let wasPremium = isPremium
         isPremium = info.entitlements[Self.entitlementID]?.isActive == true
         UserDefaults(suiteName: Self.appGroupID)?.set(isPremium, forKey: Self.sharedDefaultsKey)
+        // Real-device feedback: widgets stayed locked after purchasing/restoring Pro — nothing
+        // ever told them to re-read the shared UserDefaults flag this method just wrote. Widgets
+        // otherwise only refresh on their own schedule (up to ~30 minutes) or on next app launch.
+        if isPremium != wasPremium {
+            WidgetCenter.shared.reloadAllTimelines()
+        }
     }
 }
 

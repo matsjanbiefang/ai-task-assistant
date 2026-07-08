@@ -2,8 +2,8 @@ import Foundation
 import SwiftData
 import WidgetKit
 
-// Phase 3 (Widgets): shared read model + timeline provider for all four widgets. Runs in the
-// widget extension's own process, reading the same SwiftData store as the main app via
+// Phase 3 (Widgets): shared read model + timeline provider for all widgets. Runs in the widget
+// extension's own process, reading the same SwiftData store as the main app via
 // `SharedModelContainer` (App Group-backed). Premium gating reads the flag `SubscriptionService`
 // mirrors into the same App Group's UserDefaults on every entitlement check — the widget process
 // can't call the RevenueCat SDK itself.
@@ -18,6 +18,13 @@ struct TaskWidgetEntry: TimelineEntry {
     let todayTasks: [TaskSummary]
     let openCount: Int
     let completedTodayCount: Int
+    // Real-device feedback: "add some more widgets, like calendar, tasks, shopping list" —
+    // upcoming dated tasks (for a Calendar widget), open undated tasks (for a general Tasks
+    // widget), and open shopping list items, alongside the original today/progress/lock-screen
+    // data above.
+    let upcomingTasks: [TaskSummary]
+    let undatedTasks: [TaskSummary]
+    let shoppingItems: [String]
     let isPremium: Bool
 
     static let placeholder = TaskWidgetEntry(
@@ -28,6 +35,14 @@ struct TaskWidgetEntry: TimelineEntry {
         ],
         openCount: 5,
         completedTodayCount: 2,
+        upcomingTasks: [
+            TaskSummary(id: UUID(), title: "Team offsite", dueTime: nil),
+            TaskSummary(id: UUID(), title: "Renew passport", dueTime: nil)
+        ],
+        undatedTasks: [
+            TaskSummary(id: UUID(), title: "Read that book", dueTime: nil)
+        ],
+        shoppingItems: ["Milk", "Eggs", "Bread"],
         isPremium: true
     )
 }
@@ -45,8 +60,9 @@ struct TaskWidgetProvider: TimelineProvider {
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<TaskWidgetEntry>) -> Void) {
         let entry = currentEntry()
-        // The app also explicitly reloads timelines on every task create/complete/delete; this
-        // refresh is just a fallback for whatever time the widget happens to be on screen.
+        // The app also explicitly reloads timelines on every task create/complete/delete and on
+        // every subscription status change; this refresh is just a fallback for whatever time the
+        // widget happens to be on screen.
         let nextRefresh = Calendar.current.date(byAdding: .minute, value: 30, to: .now) ?? .now
         completion(Timeline(entries: [entry], policy: .after(nextRefresh)))
     }
@@ -72,11 +88,37 @@ struct TaskWidgetProvider: TimelineProvider {
             task.isCompleted && (task.dueDate.map(calendar.isDateInToday) ?? false)
         }.count
 
+        // Next 7 days, excluding today (which the "Today's Tasks" widget already covers).
+        guard let weekEnd = calendar.date(byAdding: .day, value: 7, to: .now) else {
+            return TaskWidgetEntry(date: .now, todayTasks: Array(today), openCount: openTasks.count, completedTodayCount: completedToday, upcomingTasks: [], undatedTasks: [], shoppingItems: [], isPremium: isPremium)
+        }
+        let upcoming = openTasks
+            .filter { task in
+                guard let due = task.dueDate else { return false }
+                return !calendar.isDateInToday(due) && due > .now && due < weekEnd
+            }
+            .sorted { ($0.dueDate ?? .distantFuture) < ($1.dueDate ?? .distantFuture) }
+            .prefix(5)
+            .map { TaskSummary(id: $0.id, title: $0.title, dueTime: $0.dueTime) }
+
+        let undated = openTasks
+            .filter { $0.dueDate == nil }
+            .prefix(5)
+            .map { TaskSummary(id: $0.id, title: $0.title, dueTime: nil) }
+
+        let shoppingItems = (try? context.fetch(FetchDescriptor<ShoppingItem>(sortBy: [SortDescriptor(\.order)])))?
+            .filter { !$0.isCompleted }
+            .prefix(6)
+            .map(\.text) ?? []
+
         return TaskWidgetEntry(
             date: .now,
             todayTasks: Array(today),
             openCount: openTasks.count,
             completedTodayCount: completedToday,
+            upcomingTasks: Array(upcoming),
+            undatedTasks: Array(undated),
+            shoppingItems: Array(shoppingItems),
             isPremium: isPremium
         )
     }

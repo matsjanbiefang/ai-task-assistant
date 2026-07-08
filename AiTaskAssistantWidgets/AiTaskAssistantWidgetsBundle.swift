@@ -8,6 +8,9 @@ struct AiTaskAssistantWidgetsBundle: WidgetBundle {
         QuickAddWidget()
         TaskProgressWidget()
         LockScreenWidget()
+        CalendarWidget()
+        TasksWidget()
+        ShoppingListWidget()
     }
 }
 
@@ -185,6 +188,165 @@ struct LockScreenWidgetView: View {
                     .lineLimit(2)
                     .widgetURL(URL(string: "aitask://assistant"))
             }
+        }
+    }
+}
+
+// Real-device feedback: "add some more widgets, like calendar, tasks, shopping list."
+
+struct CalendarWidget: Widget {
+    let kind = "CalendarWidget"
+
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: kind, provider: TaskWidgetProvider()) { entry in
+            CalendarWidgetView(entry: entry)
+        }
+        .configurationDisplayName("Upcoming")
+        .description("Your next dated tasks for the coming week.")
+        .supportedFamilies([.systemSmall, .systemMedium])
+    }
+}
+
+struct CalendarWidgetView: View {
+    let entry: TaskWidgetEntry
+
+    var body: some View {
+        if !entry.isPremium {
+            LockedWidgetContent()
+        } else if entry.upcomingTasks.isEmpty {
+            VStack(spacing: 4) {
+                Image(systemName: "calendar")
+                    .foregroundStyle(WidgetTheme.mutedGrey)
+                Text("Nothing coming up")
+                    .font(.caption)
+                    .foregroundStyle(WidgetTheme.mutedGrey)
+            }
+            .widgetURL(URL(string: "aitask://assistant"))
+        } else {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Upcoming")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(WidgetTheme.mutedGrey)
+                ForEach(entry.upcomingTasks.prefix(4)) { task in
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: "calendar")
+                            .font(.caption2)
+                            .foregroundStyle(WidgetTheme.lime)
+                        Text(task.title)
+                            .font(.caption)
+                            .foregroundStyle(WidgetTheme.ink)
+                            .lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(12)
+            .widgetURL(URL(string: "aitask://assistant"))
+        }
+    }
+}
+
+struct TasksWidget: Widget {
+    let kind = "TasksWidget"
+
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: kind, provider: TaskWidgetProvider()) { entry in
+            TasksWidgetView(entry: entry)
+        }
+        .configurationDisplayName("Tasks")
+        .description("Your open tasks that don't have a date yet.")
+        .supportedFamilies([.systemSmall, .systemMedium])
+    }
+}
+
+struct TasksWidgetView: View {
+    let entry: TaskWidgetEntry
+
+    var body: some View {
+        if !entry.isPremium {
+            LockedWidgetContent()
+        } else if entry.undatedTasks.isEmpty {
+            VStack(spacing: 4) {
+                Image(systemName: "checkmark.circle")
+                    .foregroundStyle(WidgetTheme.mutedGrey)
+                Text("No open tasks")
+                    .font(.caption)
+                    .foregroundStyle(WidgetTheme.mutedGrey)
+            }
+            .widgetURL(URL(string: "aitask://assistant"))
+        } else {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Tasks")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(WidgetTheme.mutedGrey)
+                ForEach(entry.undatedTasks.prefix(4)) { task in
+                    HStack(alignment: .top, spacing: 6) {
+                        Circle()
+                            .fill(WidgetTheme.lime)
+                            .frame(width: 6, height: 6)
+                            .padding(.top, 5)
+                        Text(task.title)
+                            .font(.caption)
+                            .foregroundStyle(WidgetTheme.ink)
+                            .lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(12)
+            .widgetURL(URL(string: "aitask://assistant"))
+        }
+    }
+}
+
+struct ShoppingListWidget: Widget {
+    let kind = "ShoppingListWidget"
+
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: kind, provider: TaskWidgetProvider()) { entry in
+            ShoppingListWidgetView(entry: entry)
+        }
+        .configurationDisplayName("Shopping List")
+        .description("Your open shopping list items.")
+        .supportedFamilies([.systemSmall, .systemMedium])
+    }
+}
+
+struct ShoppingListWidgetView: View {
+    let entry: TaskWidgetEntry
+
+    var body: some View {
+        if !entry.isPremium {
+            LockedWidgetContent()
+        } else if entry.shoppingItems.isEmpty {
+            VStack(spacing: 4) {
+                Image(systemName: "cart")
+                    .foregroundStyle(WidgetTheme.mutedGrey)
+                Text("Shopping list is empty")
+                    .font(.caption)
+                    .foregroundStyle(WidgetTheme.mutedGrey)
+            }
+            .widgetURL(URL(string: "aitask://assistant"))
+        } else {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Shopping List")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(WidgetTheme.mutedGrey)
+                ForEach(Array(entry.shoppingItems.prefix(4)), id: \.self) { item in
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: "cart.fill")
+                            .font(.caption2)
+                            .foregroundStyle(WidgetTheme.lime)
+                        Text(item)
+                            .font(.caption)
+                            .foregroundStyle(WidgetTheme.ink)
+                            .lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(12)
+            .widgetURL(URL(string: "aitask://assistant"))
         }
     }
 }

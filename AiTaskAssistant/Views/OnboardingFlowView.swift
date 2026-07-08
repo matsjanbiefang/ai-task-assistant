@@ -1,41 +1,47 @@
 import SwiftUI
+import RevenueCat
 
 // Phase 5: full feature tour shown once before the app is used. Each page mirrors the real UI
 // it's introducing rather than describing it in the abstract, matching the rest of the app's
 // "show, don't tell" style.
 //
 // Real-device feedback folded in here:
-// - Language selection moved to the FIRST page (was last) — the rest of the tour's copy is
-//   localized live against whatever is picked, via `OnboardingCopy.text(for:in:)` below.
-// - Every page's content is now vertically centered instead of pinned to the top, leaving the
-//   lower half of the screen visibly empty.
-// - Notification permission is requested when tapping the shared Continue/Get Started button on
-//   the notifications page itself, not from a separate in-page button.
-// - Two new pages: worked examples (including the shopping-list feature) and a more detailed
-//   explanation of how the Siri shortcut behaves.
+// - Language is the first page and starts with NOTHING selected (Continue disabled until a
+//   choice is made) — every later page's copy, including the illustrative examples and the Siri
+//   walkthrough, is localized live against whatever gets picked, via `OnboardingCopy` below.
+// - Notification permission is requested when tapping the shared Continue button on that page.
+//   If granted, the flow goes straight to a shared final page. If denied, an extra "here's why
+//   this helps" page is inserted first, then the same final page.
+// - A paywall page (previously missing from onboarding entirely) sits before notifications, with
+//   its own "Start Free Trial" action and a "Maybe Later" skip via the shared Continue button.
 struct OnboardingFlowView: View {
     var onFinish: (SupportedLanguage) -> Void
 
     private enum Page: Int, CaseIterable {
-        case language, welcome, notes, examples, speech, siri, widgets, notifications
+        case language, welcome, notes, examples, speech, siri, widgets, paywall, notifications, notificationsValue, final
     }
 
     @State private var page: Page = .language
-    @State private var selectedLanguage = SupportedLanguage.deviceDefault.isSupportedByLanguagePack
-        ? SupportedLanguage.deviceDefault : .en
+    @State private var selectedLanguage: SupportedLanguage?
+    @State private var notificationsGranted: Bool?
+
+    private var language: SupportedLanguage { selectedLanguage ?? .en }
 
     var body: some View {
         VStack(spacing: 0) {
             TabView(selection: $page) {
                 OnboardingLanguageView(embedded: true, selected: $selectedLanguage)
                     .tag(Page.language)
-                WelcomePage(language: selectedLanguage).tag(Page.welcome)
-                NotesDemoPage(language: selectedLanguage).tag(Page.notes)
-                ExamplesPage(language: selectedLanguage).tag(Page.examples)
-                SpeechDemoPage(language: selectedLanguage).tag(Page.speech)
-                SiriPage(language: selectedLanguage).tag(Page.siri)
-                WidgetsPage(language: selectedLanguage).tag(Page.widgets)
-                NotificationsPage(language: selectedLanguage).tag(Page.notifications)
+                WelcomePage(language: language).tag(Page.welcome)
+                NotesDemoPage(language: language).tag(Page.notes)
+                ExamplesPage(language: language).tag(Page.examples)
+                SpeechDemoPage(language: language).tag(Page.speech)
+                SiriPage(language: language).tag(Page.siri)
+                WidgetsPage(language: language).tag(Page.widgets)
+                OnboardingPaywallPage(language: language, onAdvance: { advance() }).tag(Page.paywall)
+                NotificationsPage(language: language).tag(Page.notifications)
+                NotificationsValuePage(language: language).tag(Page.notificationsValue)
+                FinalPage(language: language).tag(Page.final)
             }
             .tabViewStyle(.page(indexDisplayMode: .always))
             .indexViewStyle(.page(backgroundDisplayMode: .always))
@@ -45,20 +51,19 @@ struct OnboardingFlowView: View {
         .background(Theme.Color.paper)
     }
 
-    private var isLastPage: Bool { page == Page.allCases.last }
+    private var isLastPage: Bool { page == .final }
+
+    private var continueLabel: String {
+        if isLastPage { return OnboardingCopy.getStarted(language) }
+        if page == .paywall { return OnboardingCopy.maybeLater(language) }
+        return OnboardingCopy.continueLabel(language)
+    }
 
     private var continueButton: some View {
         Button {
-            if page == .notifications {
-                Task { _ = await NotificationService.shared.requestPermission() }
-            }
-            if isLastPage {
-                onFinish(selectedLanguage)
-            } else if let next = Page(rawValue: page.rawValue + 1) {
-                withAnimation { page = next }
-            }
+            advance()
         } label: {
-            Text(isLastPage ? OnboardingCopy.getStarted(selectedLanguage) : OnboardingCopy.continueLabel(selectedLanguage))
+            Text(continueLabel)
                 .font(Theme.Typography.body(16, weight: .semibold))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
@@ -66,7 +71,24 @@ struct OnboardingFlowView: View {
         .buttonStyle(.borderedProminent)
         .tint(Theme.Color.lime)
         .foregroundStyle(Theme.Color.ink)
+        .disabled(page == .language && selectedLanguage == nil)
         .padding(20)
+    }
+
+    private func advance() {
+        if page == .notifications {
+            Task {
+                let granted = await NotificationService.shared.requestPermission()
+                notificationsGranted = granted
+                withAnimation { page = granted ? .final : .notificationsValue }
+            }
+            return
+        }
+        if isLastPage {
+            onFinish(language)
+        } else if let next = Page(rawValue: page.rawValue + 1) {
+            withAnimation { page = next }
+        }
     }
 }
 
@@ -120,24 +142,25 @@ private struct NotesDemoPage: View {
     let language: SupportedLanguage
     var body: some View {
         let copy = OnboardingCopy.text(for: .notes, in: language)
+        let example = OnboardingCopy.notesExample(language)
         OnboardingPageLayout(icon: "square.and.pencil", title: copy.title, subtitle: copy.subtitle) {
-            exampleCard(input: "call max tomorrow!!", result: "1 task created", resultIcon: "checkmark.circle.fill")
+            exampleCard(input: example.input, result: example.result, resultIcon: "checkmark.circle.fill")
         }
     }
 }
 
-// New page: a few more worked examples, explicitly including the shopping-list feature, since
-// the single note-to-task example on the previous page didn't show the breadth of what gets
-// detected or that shopping lines route somewhere different entirely.
+// A few more worked examples, explicitly including the shopping-list feature, since the single
+// note-to-task example on the previous page didn't show the breadth of what gets detected or
+// that shopping lines route somewhere different entirely.
 private struct ExamplesPage: View {
     let language: SupportedLanguage
     var body: some View {
         let copy = OnboardingCopy.text(for: .examples, in: language)
         OnboardingPageLayout(icon: "sparkles", title: copy.title, subtitle: copy.subtitle) {
             VStack(spacing: 10) {
-                exampleCard(input: "milk, eggs, bread", result: "Added to your shopping list", resultIcon: "cart.fill")
-                exampleCard(input: "dentist next tuesday 10am", result: "Task created · Tuesday · 10:00", resultIcon: "calendar")
-                exampleCard(input: "call mom !!", result: "Task created · High priority", resultIcon: "flag.fill")
+                ForEach(Array(OnboardingCopy.examples(language).enumerated()), id: \.offset) { _, example in
+                    exampleCard(input: example.input, result: example.result, resultIcon: example.icon)
+                }
             }
             .padding(.horizontal, 32)
         }
@@ -162,9 +185,10 @@ private struct SiriPage: View {
         let copy = OnboardingCopy.text(for: .siri, in: language)
         OnboardingPageLayout(icon: "waveform", title: copy.title, subtitle: copy.subtitle) {
             VStack(alignment: .leading, spacing: 10) {
-                siriStep(icon: "waveform", text: "“Hey Siri, add a note to TaskMind”")
-                siriStep(icon: "arrow.turn.down.right", text: "TaskMind opens, ready to listen")
-                siriStep(icon: "text.bubble.fill", text: "“Ready. What's on your mind?”")
+                let steps = OnboardingCopy.siriSteps(language)
+                siriStep(icon: "waveform", text: steps[0])
+                siriStep(icon: "arrow.turn.down.right", text: steps[1])
+                siriStep(icon: "text.bubble.fill", text: steps[2])
             }
             .padding(16)
             .background(Theme.Color.hairline.opacity(0.3))
@@ -193,11 +217,124 @@ private struct WidgetsPage: View {
     }
 }
 
+// Real-device feedback: onboarding never actually showed the paywall — the only way to reach it
+// was Settings or accidentally hitting the free-tier task cap. This is a lightweight page (not a
+// reuse of PaywallView, which brings its own NavigationStack/toolbar "Close" button that doesn't
+// fit a TabView page) with its own purchase action; skipping is just the shared Continue button
+// relabeled "Maybe Later".
+private struct OnboardingPaywallPage: View {
+    let language: SupportedLanguage
+    let onAdvance: () -> Void
+
+    @ObservedObject private var subscriptions = SubscriptionService.shared
+    @State private var selected: Package?
+    @State private var isPurchasing = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        let copy = OnboardingCopy.text(for: .paywall, in: language)
+        OnboardingPageLayout(icon: "sparkle", title: copy.title, subtitle: copy.subtitle) {
+            VStack(spacing: 14) {
+                ForEach(subscriptions.offering?.availablePackages ?? [], id: \.identifier) { package in
+                    packageRow(package)
+                }
+                if let errorMessage {
+                    Text(errorMessage)
+                        .font(Theme.Typography.meta)
+                        .foregroundStyle(.red)
+                }
+                Button {
+                    purchase()
+                } label: {
+                    HStack {
+                        if isPurchasing { ProgressView().tint(Theme.Color.ink) }
+                        Text(OnboardingCopy.startFreeTrial(language))
+                            .font(Theme.Typography.body(16, weight: .semibold))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 4)
+                }
+                .buttonStyle(.lime)
+                .disabled(selected == nil || isPurchasing)
+            }
+            .padding(.horizontal, 32)
+            .padding(.top, 8)
+        }
+        .task {
+            await subscriptions.fetchOfferings()
+            selected = subscriptions.offering?.availablePackages.first { $0.packageType == .annual }
+                ?? subscriptions.offering?.availablePackages.first
+        }
+    }
+
+    private func packageRow(_ package: Package) -> some View {
+        let isSelected = selected?.identifier == package.identifier
+        return Button {
+            selected = package
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(package.storeProduct.localizedTitle)
+                        .font(Theme.Typography.body(15, weight: .semibold))
+                        .foregroundStyle(Theme.Color.ink)
+                    Text(package.storeProduct.localizedPriceString)
+                        .font(Theme.Typography.meta)
+                        .foregroundStyle(Theme.Color.mutedGrey)
+                }
+                Spacer()
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(isSelected ? Theme.Color.limeDeep : Theme.Color.mutedGrey)
+            }
+            .padding(14)
+            .background(SwiftUI.Color.white)
+            .overlay(
+                RoundedRectangle(cornerRadius: Theme.Metrics.cardRadius)
+                    .stroke(isSelected ? Theme.Color.limeDeep : Theme.Color.hairline, lineWidth: isSelected ? 2 : 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: Theme.Metrics.cardRadius))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func purchase() {
+        guard let package = selected else { return }
+        isPurchasing = true
+        errorMessage = nil
+        Task {
+            do {
+                try await subscriptions.purchase(package: package)
+                isPurchasing = false
+                onAdvance()
+            } catch {
+                isPurchasing = false
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+}
+
 private struct NotificationsPage: View {
     let language: SupportedLanguage
     var body: some View {
         let copy = OnboardingCopy.text(for: .notifications, in: language)
         OnboardingPageLayout(icon: "bell.badge.fill", title: copy.title, subtitle: copy.subtitle) { EmptyView() }
+    }
+}
+
+// Only reached if the user declines notifications on the previous page.
+private struct NotificationsValuePage: View {
+    let language: SupportedLanguage
+    var body: some View {
+        let copy = OnboardingCopy.text(for: .notificationsValue, in: language)
+        OnboardingPageLayout(icon: "bell.slash", title: copy.title, subtitle: copy.subtitle) { EmptyView() }
+    }
+}
+
+private struct FinalPage: View {
+    let language: SupportedLanguage
+    var body: some View {
+        let copy = OnboardingCopy.text(for: .final, in: language)
+        OnboardingPageLayout(icon: "checkmark.seal.fill", title: copy.title, subtitle: copy.subtitle) { EmptyView() }
     }
 }
 
@@ -225,26 +362,42 @@ private func exampleCard(input: String, result: String, resultIcon: String) -> s
 // MARK: - Localized copy
 
 // Onboarding is the one place in the app where the "current UI language" is chosen live, before
-// it's saved anywhere — so its own instructional text is translated directly here against the
+// it's saved anywhere — so its own instructional text (and, per real-device feedback, its
+// illustrative examples and Siri walkthrough too) is translated directly here against the
 // in-progress selection, rather than through the general string-catalog/environment-locale
-// mechanism the rest of the app uses (see AppLanguage.swift) which only takes effect on next
-// launch/after this flow finishes. The illustrative example inputs on the Notes/Examples/Siri
-// pages are intentionally left in English in every language for now — translating realistic,
-// natural-sounding sample notes per language is future work, not a quick lookup.
+// mechanism the rest of the app uses, which only takes effect on next launch/after this flow
+// finishes.
+//
+// Known limitation: the shopping-list trigger phrase (`shoppingListPattern` in the language
+// packs) is only implemented for English and German today — the other six languages' example
+// below is phrased the same way for consistency, but won't actually route to the shopping list
+// on-device yet in those languages. Flagged here rather than silently overclaiming.
 private enum OnboardingCopy {
-    // fileprivate (not private) — unlike top-level `private`, a *nested* `private` type is scoped
-    // strictly to its enclosing declaration's own body, not the whole file, so the sibling page
-    // structs below (SiriPage, ExamplesPage, etc.) couldn't otherwise reference this type at all.
     fileprivate enum Page {
-        case welcome, notes, examples, speech, siri, widgets, notifications
+        case welcome, notes, examples, speech, siri, widgets, paywall, notifications, notificationsValue, final
     }
 
     private struct Copy { let title: String; let subtitle: String }
+    private struct Example { let input: String; let result: String; let icon: String }
 
     static func text(for page: Page, in language: SupportedLanguage) -> (title: String, subtitle: String) {
         let table = copy[page] ?? [:]
-        let copy = table[language.rawValue] ?? table["en"]!
-        return (copy.title, copy.subtitle)
+        let entry = table[language.rawValue] ?? table["en"]!
+        return (entry.title, entry.subtitle)
+    }
+
+    static func notesExample(_ language: SupportedLanguage) -> (input: String, result: String) {
+        let entry = notesExamples[language.rawValue] ?? notesExamples["en"]!
+        return (entry.input, entry.result)
+    }
+
+    static func examples(_ language: SupportedLanguage) -> [(input: String, result: String, icon: String)] {
+        let list = examplesTable[language.rawValue] ?? examplesTable["en"]!
+        return list.map { ($0.input, $0.result, $0.icon) }
+    }
+
+    static func siriSteps(_ language: SupportedLanguage) -> [String] {
+        siriStepsTable[language.rawValue] ?? siriStepsTable["en"]!
     }
 
     static func continueLabel(_ language: SupportedLanguage) -> String {
@@ -255,6 +408,14 @@ private enum OnboardingCopy {
         getStartedLabels[language.rawValue] ?? getStartedLabels["en"]!
     }
 
+    static func maybeLater(_ language: SupportedLanguage) -> String {
+        maybeLaterLabels[language.rawValue] ?? maybeLaterLabels["en"]!
+    }
+
+    static func startFreeTrial(_ language: SupportedLanguage) -> String {
+        startFreeTrialLabels[language.rawValue] ?? startFreeTrialLabels["en"]!
+    }
+
     private static let continueLabels: [String: String] = [
         "en": "Continue", "de": "Weiter", "es": "Continuar", "fr": "Continuer",
         "it": "Continua", "nl": "Doorgaan", "pl": "Dalej", "pt": "Continuar",
@@ -263,6 +424,82 @@ private enum OnboardingCopy {
     private static let getStartedLabels: [String: String] = [
         "en": "Get Started", "de": "Los geht's", "es": "Empezar", "fr": "Commencer",
         "it": "Inizia", "nl": "Aan de slag", "pl": "Zaczynajmy", "pt": "Começar",
+    ]
+
+    private static let maybeLaterLabels: [String: String] = [
+        "en": "Maybe Later", "de": "Vielleicht später", "es": "Quizás más tarde", "fr": "Peut-être plus tard",
+        "it": "Magari più tardi", "nl": "Misschien later", "pl": "Może później", "pt": "Talvez mais tarde",
+    ]
+
+    private static let startFreeTrialLabels: [String: String] = [
+        "en": "Start Free Trial", "de": "Kostenlose Testphase starten", "es": "Iniciar prueba gratuita",
+        "fr": "Démarrer l'essai gratuit", "it": "Inizia la prova gratuita", "nl": "Start gratis proefperiode",
+        "pl": "Rozpocznij bezpłatny okres próbny", "pt": "Iniciar teste gratuito",
+    ]
+
+    private static let notesExamples: [String: (input: String, result: String)] = [
+        "en": ("call max tomorrow!!", "1 task created"),
+        "de": ("max morgen anrufen!!", "1 Aufgabe erstellt"),
+        "es": ("llamar a max mañana!!", "1 tarea creada"),
+        "fr": ("appeler max demain!!", "1 tâche créée"),
+        "it": ("chiamare max domani!!", "1 attività creata"),
+        "nl": ("max morgen bellen!!", "1 taak aangemaakt"),
+        "pl": ("zadzwonić do maxa jutro!!", "Utworzono 1 zadanie"),
+        "pt": ("ligar para o max amanhã!!", "1 tarefa criada"),
+    ]
+
+    private static let examplesTable: [String: [Example]] = [
+        "en": [
+            Example(input: "add milk, eggs, and bread to shopping list", result: "Added to your shopping list", icon: "cart.fill"),
+            Example(input: "dentist next tuesday 10am", result: "Task created · Tuesday · 10:00", icon: "calendar"),
+            Example(input: "call mom !!", result: "Task created · High priority", icon: "flag.fill"),
+        ],
+        "de": [
+            Example(input: "milch, eier und brot auf die einkaufsliste", result: "Zu deiner Einkaufsliste hinzugefügt", icon: "cart.fill"),
+            Example(input: "zahnarzt nächsten dienstag 10 uhr", result: "Aufgabe erstellt · Dienstag · 10:00", icon: "calendar"),
+            Example(input: "mama anrufen !!", result: "Aufgabe erstellt · Hohe Priorität", icon: "flag.fill"),
+        ],
+        "es": [
+            Example(input: "añade leche, huevos y pan a la lista de la compra", result: "Añadido a tu lista de la compra", icon: "cart.fill"),
+            Example(input: "dentista el próximo martes a las 10", result: "Tarea creada · Martes · 10:00", icon: "calendar"),
+            Example(input: "llamar a mamá !!", result: "Tarea creada · Prioridad alta", icon: "flag.fill"),
+        ],
+        "fr": [
+            Example(input: "ajoute du lait, des œufs et du pain à la liste de courses", result: "Ajouté à ta liste de courses", icon: "cart.fill"),
+            Example(input: "dentiste mardi prochain à 10h", result: "Tâche créée · Mardi · 10:00", icon: "calendar"),
+            Example(input: "appeler maman !!", result: "Tâche créée · Priorité haute", icon: "flag.fill"),
+        ],
+        "it": [
+            Example(input: "aggiungi latte, uova e pane alla lista della spesa", result: "Aggiunto alla tua lista della spesa", icon: "cart.fill"),
+            Example(input: "dentista martedì prossimo alle 10", result: "Attività creata · Martedì · 10:00", icon: "calendar"),
+            Example(input: "chiamare la mamma !!", result: "Attività creata · Priorità alta", icon: "flag.fill"),
+        ],
+        "nl": [
+            Example(input: "voeg melk, eieren en brood toe aan de boodschappenlijst", result: "Toegevoegd aan je boodschappenlijst", icon: "cart.fill"),
+            Example(input: "tandarts volgende dinsdag om 10 uur", result: "Taak aangemaakt · Dinsdag · 10:00", icon: "calendar"),
+            Example(input: "mama bellen !!", result: "Taak aangemaakt · Hoge prioriteit", icon: "flag.fill"),
+        ],
+        "pl": [
+            Example(input: "dodaj mleko, jajka i chleb do listy zakupów", result: "Dodano do listy zakupów", icon: "cart.fill"),
+            Example(input: "dentysta w przyszły wtorek o 10", result: "Utworzono zadanie · Wtorek · 10:00", icon: "calendar"),
+            Example(input: "zadzwonić do mamy !!", result: "Utworzono zadanie · Wysoki priorytet", icon: "flag.fill"),
+        ],
+        "pt": [
+            Example(input: "adiciona leite, ovos e pão à lista de compras", result: "Adicionado à tua lista de compras", icon: "cart.fill"),
+            Example(input: "dentista na próxima terça-feira às 10h", result: "Tarefa criada · Terça-feira · 10:00", icon: "calendar"),
+            Example(input: "ligar para a mãe !!", result: "Tarefa criada · Prioridade alta", icon: "flag.fill"),
+        ],
+    ]
+
+    private static let siriStepsTable: [String: [String]] = [
+        "en": ["“Hey Siri, add a note to TaskMind”", "TaskMind opens, ready to listen", "“Ready. What's on your mind?”"],
+        "de": ["„Hey Siri, füge eine Notiz zu TaskMind hinzu“", "TaskMind öffnet sich, bereit zum Zuhören", "„Bereit. Was hast du im Kopf?“"],
+        "es": ["«Oye Siri, añade una nota a TaskMind»", "TaskMind se abre, listo para escuchar", "«Listo. ¿Qué tienes en mente?»"],
+        "fr": ["« Dis Siri, ajoute une note à TaskMind »", "TaskMind s'ouvre, prêt à écouter", "« Prêt. À quoi penses-tu ? »"],
+        "it": ["«Hey Siri, aggiungi una nota a TaskMind»", "TaskMind si apre, pronto ad ascoltare", "«Pronto. A cosa stai pensando?»"],
+        "nl": ["\"Hey Siri, voeg een notitie toe aan TaskMind\"", "TaskMind opent, klaar om te luisteren", "\"Klaar. Wat heb je in gedachten?\""],
+        "pl": ["„Hej Siri, dodaj notatkę do TaskMind”", "TaskMind się otwiera, gotowy do słuchania", "„Gotowe. Co masz na myśli?”"],
+        "pt": ["«Hey Siri, adiciona uma nota ao TaskMind»", "O TaskMind abre, pronto para ouvir", "«Pronto. Em que estás a pensar?»"],
     ]
 
     private static let copy: [Page: [String: Copy]] = [
@@ -326,6 +563,16 @@ private enum OnboardingCopy {
             "pl": Copy(title: "Widżety na ekran główny i ekran blokady", subtitle: "Zobacz dzisiejsze zadania, swoje postępy lub od razu dodaj nowe — prosto z ekranu głównego lub ekranu blokady. Przytrzymaj ekran główny i stuknij +, aby dodać widżet."),
             "pt": Copy(title: "Widgets para o ecrã principal e de bloqueio", subtitle: "Vê as tarefas de hoje, o teu progresso, ou passa diretamente a adicionar uma — a partir do ecrã principal ou de bloqueio. Mantém premido o ecrã principal e toca em + para adicionar um."),
         ],
+        .paywall: [
+            "en": Copy(title: "Unlock TaskMind Pro", subtitle: "Unlimited tasks and every widget, with a 1-week free trial."),
+            "de": Copy(title: "TaskMind Pro freischalten", subtitle: "Unbegrenzte Aufgaben und alle Widgets, mit einer 1-wöchigen kostenlosen Testphase."),
+            "es": Copy(title: "Desbloquea TaskMind Pro", subtitle: "Tareas ilimitadas y todos los widgets, con una prueba gratuita de 1 semana."),
+            "fr": Copy(title: "Débloque TaskMind Pro", subtitle: "Tâches illimitées et tous les widgets, avec un essai gratuit d'une semaine."),
+            "it": Copy(title: "Sblocca TaskMind Pro", subtitle: "Attività illimitate e tutti i widget, con una prova gratuita di 1 settimana."),
+            "nl": Copy(title: "Ontgrendel TaskMind Pro", subtitle: "Onbeperkte taken en alle widgets, met een gratis proefperiode van 1 week."),
+            "pl": Copy(title: "Odblokuj TaskMind Pro", subtitle: "Nieograniczona liczba zadań i wszystkie widżety, z 1-tygodniowym darmowym okresem próbnym."),
+            "pt": Copy(title: "Desbloqueia o TaskMind Pro", subtitle: "Tarefas ilimitadas e todos os widgets, com um teste gratuito de 1 semana."),
+        ],
         .notifications: [
             "en": Copy(title: "Never miss a due date", subtitle: "TaskMind can remind you before a task is due. You can change this anytime in Settings."),
             "de": Copy(title: "Verpasse nie wieder einen Termin", subtitle: "TaskMind kann dich erinnern, bevor eine Aufgabe fällig ist. Du kannst das jederzeit in den Einstellungen ändern."),
@@ -335,6 +582,26 @@ private enum OnboardingCopy {
             "nl": Copy(title: "Mis nooit meer een deadline", subtitle: "TaskMind kan je herinneren voordat een taak vervalt. Je kunt dit op elk moment wijzigen in Instellingen."),
             "pl": Copy(title: "Nigdy nie przegap terminu", subtitle: "TaskMind może przypomnieć Ci, zanim zadanie stanie się wymagalne. Możesz to zmienić w dowolnym momencie w Ustawieniach."),
             "pt": Copy(title: "Nunca percas um prazo", subtitle: "O TaskMind pode lembrar-te antes de uma tarefa vencer. Podes alterar isto a qualquer momento nas Definições."),
+        ],
+        .notificationsValue: [
+            "en": Copy(title: "You can always turn this on later", subtitle: "Reminders help you catch a task before it's due. If you change your mind, enable notifications anytime in Settings."),
+            "de": Copy(title: "Du kannst das jederzeit später aktivieren", subtitle: "Erinnerungen helfen dir, eine Aufgabe rechtzeitig zu erledigen. Du kannst Benachrichtigungen jederzeit in den Einstellungen aktivieren."),
+            "es": Copy(title: "Siempre puedes activarlo más tarde", subtitle: "Los recordatorios te ayudan a no perderte una tarea antes de su vencimiento. Si cambias de opinión, activa las notificaciones cuando quieras en Ajustes."),
+            "fr": Copy(title: "Tu peux toujours l'activer plus tard", subtitle: "Les rappels t'aident à ne pas manquer une tâche avant son échéance. Si tu changes d'avis, active les notifications à tout moment dans les réglages."),
+            "it": Copy(title: "Puoi sempre attivarlo più tardi", subtitle: "I promemoria ti aiutano a non perdere un'attività prima della scadenza. Se cambi idea, attiva le notifiche in qualsiasi momento nelle Impostazioni."),
+            "nl": Copy(title: "Je kunt dit later altijd inschakelen", subtitle: "Herinneringen helpen je een taak op tijd af te ronden. Als je van gedachten verandert, kun je meldingen op elk moment inschakelen in Instellingen."),
+            "pl": Copy(title: "Zawsze możesz włączyć to później", subtitle: "Przypomnienia pomagają nie przegapić zadania przed terminem. Jeśli zmienisz zdanie, możesz włączyć powiadomienia w dowolnym momencie w Ustawieniach."),
+            "pt": Copy(title: "Podes sempre ativar isto mais tarde", subtitle: "Os lembretes ajudam-te a não perder uma tarefa antes do prazo. Se mudares de ideias, ativa as notificações a qualquer momento nas Definições."),
+        ],
+        .final: [
+            "en": Copy(title: "You're all set", subtitle: "Start capturing tasks the way you think — just write, and TaskMind handles the rest."),
+            "de": Copy(title: "Alles bereit", subtitle: "Beginne, Aufgaben so festzuhalten, wie du denkst — schreib einfach, und TaskMind erledigt den Rest."),
+            "es": Copy(title: "Todo listo", subtitle: "Empieza a capturar tareas tal como piensas — solo escribe, y TaskMind se encarga del resto."),
+            "fr": Copy(title: "Tout est prêt", subtitle: "Commence à capturer des tâches comme tu le penses — écris simplement, et TaskMind s'occupe du reste."),
+            "it": Copy(title: "Tutto pronto", subtitle: "Inizia a catturare le attività nel modo in cui pensi — scrivi semplicemente, e TaskMind farà il resto."),
+            "nl": Copy(title: "Alles is klaar", subtitle: "Begin met het vastleggen van taken zoals jij denkt — schrijf gewoon, en TaskMind doet de rest."),
+            "pl": Copy(title: "Wszystko gotowe", subtitle: "Zacznij zapisywać zadania tak, jak myślisz — po prostu pisz, a TaskMind zajmie się resztą."),
+            "pt": Copy(title: "Está tudo pronto", subtitle: "Começa a capturar tarefas da forma como pensas — escreve simplesmente, e o TaskMind trata do resto."),
         ],
     ]
 }
