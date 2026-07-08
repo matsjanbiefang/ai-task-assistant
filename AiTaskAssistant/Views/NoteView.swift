@@ -30,6 +30,7 @@ struct NoteView: View {
     @State private var showShoppingList = false
     @State private var showSettings = false
     @State private var showTasklist = false
+    @State private var showPaywall = false
     @FocusState private var focusedTarget: FocusTarget?
 
     private let extraction = RuleBasedExtractionService.shared
@@ -159,6 +160,10 @@ struct NoteView: View {
         }
         .sheet(isPresented: $showSettings) {
             SettingsView()
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showPaywall) {
+            PaywallView()
                 .presentationDragIndicator(.visible)
         }
         // Feedback round 3: tapping a single-task line's indicator opens that task's editor
@@ -579,7 +584,15 @@ struct NoteView: View {
         line.taskCount = extracted.count
         line.hasLowConfidence = extracted.contains { RuleBasedExtractionService.isLowConfidence($0.dateConfidence) }
 
+        // Phase 1 (RevenueCat): free tier caps at 5 active tasks. Checked per task rather than
+        // once for the whole line, since one line can split into several tasks and the cap should
+        // bite mid-line rather than all-or-nothing.
+        var openCount = openTasks.count
         for task in extracted {
+            guard SubscriptionService.shared.canCreateTask(currentOpenCount: openCount) else {
+                showPaywall = true
+                break
+            }
             let dueDate = parsedDate(task.dueDate)
             let item = TaskItem(
                 title: task.title,
@@ -598,6 +611,7 @@ struct NoteView: View {
                 timeOfDay: task.timeOfDay
             )
             modelContext.insert(item)
+            openCount += 1
             // Temporarily disabled: EntityMemoryService.recordMention(place:...) reproducibly
             // crashes on-device (TestFlight builds 10) with EXC_CRASH/SIGABRT — a
             // swift_dynamicCastFailure deep inside SwiftData's DefaultStore.createSnapshot,

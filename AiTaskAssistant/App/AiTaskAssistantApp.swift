@@ -8,6 +8,7 @@ struct AiTaskAssistantApp: App {
 
     init() {
         UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
+        SubscriptionService.shared.configure()
     }
 
     var body: some Scene {
