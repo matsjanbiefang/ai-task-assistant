@@ -13,6 +13,7 @@ workflows:
         XCODE_PROJECT: "AiTaskAssistant.xcodeproj"
         XCODE_SCHEME: "AiTaskAssistant"
         BUNDLE_ID: "com.matsb.AiTaskAssistant"
+        WIDGET_BUNDLE_ID: "com.matsb.AiTaskAssistant.Widgets"
 
     scripts:
       - name: Initialize keychain
@@ -25,6 +26,10 @@ workflows:
       - name: Fetch or create signing files
         script: |
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create \
+            --certificate-key @file:/tmp/ios_dist_key.pem
+          app-store-connect fetch-signing-files "$WIDGET_BUNDLE_ID" \
             --type IOS_APP_STORE \
             --create \
             --certificate-key @file:/tmp/ios_dist_key.pem

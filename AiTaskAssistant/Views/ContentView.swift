@@ -24,9 +24,15 @@ struct ContentView: View {
                 // a color scheme that should invert with the system setting.
                 .preferredColorScheme(.light)
                 .onChange(of: deepLinkDestination) { _, destination in
-                    if destination == .assistant {
+                    switch destination {
+                    case .assistant:
                         showTasks = true
                         deepLinkDestination = nil
+                    case .compose:
+                        activateDictation = true
+                        deepLinkDestination = nil
+                    case nil:
+                        break
                     }
                 }
                 .task {

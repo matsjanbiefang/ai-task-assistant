@@ -5,6 +5,7 @@ import UserNotifications
 @main
 struct AiTaskAssistantApp: App {
     @State private var deepLinkDestination: AppDestination?
+    private let sharedContainer = SharedModelContainer.make()
 
     init() {
         UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
@@ -14,7 +15,7 @@ struct AiTaskAssistantApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView(deepLinkDestination: $deepLinkDestination)
-                .modelContainer(for: [TaskItem.self, NoteLine.self, EntityMemory.self, ShoppingItem.self])
+                .modelContainer(sharedContainer)
                 .onOpenURL { url in
                     handleDeepLink(url)
                 }
@@ -22,10 +23,12 @@ struct AiTaskAssistantApp: App {
     }
 
     private func handleDeepLink(_ url: URL) {
-        // Notification taps arrive via openURL with a custom scheme
-        // e.g. aitask://assistant
+        // Notification taps and the widgets' deep links arrive via openURL with a custom scheme,
+        // e.g. aitask://assistant or aitask://compose (Phase 3's quick-add widget).
         if url.host == "assistant" {
             deepLinkDestination = .assistant
+        } else if url.host == "compose" {
+            deepLinkDestination = .compose
         }
     }
 }
@@ -59,4 +62,5 @@ class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate, @uncheck
 
 enum AppDestination {
     case assistant
+    case compose
 }

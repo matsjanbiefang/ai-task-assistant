@@ -49,7 +49,16 @@
 		A1000043 /* TasklistView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000047 /* TasklistView.swift */; };
 		A1000044 /* SubscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000048 /* SubscriptionService.swift */; };
 		A1000045 /* PaywallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000049 /* PaywallView.swift */; };
+		A1000046 /* SharedModelContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000050 /* SharedModelContainer.swift */; };
 		C1000001 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = C3000001 /* RevenueCat */; };
+		D1000001 /* AiTaskAssistantWidgetsBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2000002 /* AiTaskAssistantWidgetsBundle.swift */; };
+		D1000002 /* TaskWidgetData.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2000003 /* TaskWidgetData.swift */; };
+		D1000003 /* SharedModelContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000050 /* SharedModelContainer.swift */; };
+		D1000004 /* TaskItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000005 /* TaskItem.swift */; };
+		D1000005 /* NoteLine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000025 /* NoteLine.swift */; };
+		D1000006 /* EntityMemory.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000035 /* EntityMemory.swift */; };
+		D1000007 /* ShoppingItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000041 /* ShoppingItem.swift */; };
+		D1000010 /* AiTaskAssistantWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D2000010 /* AiTaskAssistantWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -98,6 +107,13 @@
 		A2000047 /* TasklistView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasklistView.swift; sourceTree = "<group>"; };
 		A2000048 /* SubscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionService.swift; sourceTree = "<group>"; };
 		A2000049 /* PaywallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaywallView.swift; sourceTree = "<group>"; };
+		A2000050 /* SharedModelContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedModelContainer.swift; sourceTree = "<group>"; };
+		A2000052 /* AiTaskAssistant.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AiTaskAssistant.entitlements; sourceTree = "<group>"; };
+		D2000002 /* AiTaskAssistantWidgetsBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AiTaskAssistantWidgetsBundle.swift; sourceTree = "<group>"; };
+		D2000003 /* TaskWidgetData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskWidgetData.swift; sourceTree = "<group>"; };
+		D2000004 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		D2000005 /* AiTaskAssistantWidgets.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AiTaskAssistantWidgets.entitlements; sourceTree = "<group>"; };
+		D2000010 /* AiTaskAssistantWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AiTaskAssistantWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -116,6 +132,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D3000001 /* Frameworks (Widgets) */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -124,6 +147,7 @@
 			children = (
 				A4000002 /* AiTaskAssistant */,
 				A4000003 /* AiTaskAssistantTests */,
+				D4000001 /* AiTaskAssistantWidgets */,
 				A4000004 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -141,8 +165,20 @@
 				A4000012 /* Fonts */,
 				A2000016 /* Assets.xcassets */,
 				A2000009 /* Info.plist */,
+				A2000052 /* AiTaskAssistant.entitlements */,
 			);
 			path = AiTaskAssistant;
+			sourceTree = "<group>";
+		};
+		D4000001 /* AiTaskAssistantWidgets */ = {
+			isa = PBXGroup;
+			children = (
+				D2000002 /* AiTaskAssistantWidgetsBundle.swift */,
+				D2000003 /* TaskWidgetData.swift */,
+				D2000004 /* Info.plist */,
+				D2000005 /* AiTaskAssistantWidgets.entitlements */,
+			);
+			path = AiTaskAssistantWidgets;
 			sourceTree = "<group>";
 		};
 		A4000003 /* AiTaskAssistantTests */ = {
@@ -162,6 +198,7 @@
 			children = (
 				A2000010 /* AiTaskAssistant.app */,
 				A2000011 /* AiTaskAssistantTests.xctest */,
+				D2000010 /* AiTaskAssistantWidgets.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -214,6 +251,7 @@
 				A2000036 /* EntityMemoryService.swift */,
 				A2000038 /* FoundationModelsFallback.swift */,
 				A2000048 /* SubscriptionService.swift */,
+				A2000050 /* SharedModelContainer.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -268,10 +306,12 @@
 				A7000001 /* Sources */,
 				A3000001 /* Frameworks */,
 				A7000002 /* Resources */,
+				D9000001 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				D8000002 /* PBXTargetDependency */,
 			);
 			name = AiTaskAssistant;
 			packageProductDependencies = (
@@ -298,6 +338,22 @@
 			productReference = A2000011 /* AiTaskAssistantTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		D5000001 /* AiTaskAssistantWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D6000001 /* Build configuration list for PBXNativeTarget "AiTaskAssistantWidgets" */;
+			buildPhases = (
+				D7000001 /* Sources (Widgets) */,
+				D3000001 /* Frameworks (Widgets) */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = AiTaskAssistantWidgets;
+			productName = AiTaskAssistantWidgets;
+			productReference = D2000010 /* AiTaskAssistantWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -314,6 +370,9 @@
 					A5000002 = {
 						CreatedOnToolsVersion = 16.0;
 						TestTargetID = A5000001;
+					};
+					D5000001 = {
+						CreatedOnToolsVersion = 16.0;
 					};
 				};
 			};
@@ -335,6 +394,7 @@
 			targets = (
 				A5000001 /* AiTaskAssistant */,
 				A5000002 /* AiTaskAssistantTests */,
+				D5000001 /* AiTaskAssistantWidgets */,
 			);
 		};
 /* End PBXProject section */
@@ -359,6 +419,30 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		D9000001 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				D1000010 /* AiTaskAssistantWidgets.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXContainerItemProxy section */
+		D8000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A9000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D5000001;
+			remoteInfo = AiTaskAssistantWidgets;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXSourcesBuildPhase section */
 		A7000001 /* Sources */ = {
@@ -391,6 +475,21 @@
 				A1000043 /* TasklistView.swift in Sources */,
 				A1000044 /* SubscriptionService.swift in Sources */,
 				A1000045 /* PaywallView.swift in Sources */,
+				A1000046 /* SharedModelContainer.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D7000001 /* Sources (Widgets) */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D1000001 /* AiTaskAssistantWidgetsBundle.swift in Sources */,
+				D1000002 /* TaskWidgetData.swift in Sources */,
+				D1000003 /* SharedModelContainer.swift in Sources */,
+				D1000004 /* TaskItem.swift in Sources */,
+				D1000005 /* NoteLine.swift in Sources */,
+				D1000006 /* EntityMemory.swift in Sources */,
+				D1000007 /* ShoppingItem.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -413,6 +512,11 @@
 			isa = PBXTargetDependency;
 			target = A5000001 /* AiTaskAssistant */;
 		};
+		D8000002 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D5000001 /* AiTaskAssistantWidgets */;
+			targetProxy = D8000001 /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
@@ -420,6 +524,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = AiTaskAssistant/AiTaskAssistant.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 15;
 				DEVELOPMENT_TEAM = "";
@@ -443,6 +548,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = AiTaskAssistant/AiTaskAssistant.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 15;
 				DEVELOPMENT_TEAM = "";
@@ -611,6 +717,56 @@
 			};
 			name = Release;
 		};
+		D6100001 /* Debug (Widgets) */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = AiTaskAssistantWidgets/AiTaskAssistantWidgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 15;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = AiTaskAssistantWidgets/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.matsb.AiTaskAssistant.Widgets";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		D6100002 /* Release (Widgets) */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = AiTaskAssistantWidgets/AiTaskAssistantWidgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 15;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = AiTaskAssistantWidgets/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.matsb.AiTaskAssistant.Widgets";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -637,6 +793,15 @@
 			buildConfigurations = (
 				AB000005 /* Debug */,
 				AB000006 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D6000001 /* Build configuration list for PBXNativeTarget "AiTaskAssistantWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D6100001 /* Debug */,
+				D6100002 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

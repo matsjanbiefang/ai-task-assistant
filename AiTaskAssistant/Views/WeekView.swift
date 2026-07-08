@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import WidgetKit
 
 // swipe-design-concept.md §6 "Week" (formerly AssistantView — renamed to match what this screen
 // now actually is). Default view: a 7-day strip for the current week (today filled lime), a
@@ -192,6 +193,7 @@ struct WeekView: View {
             Task { await NotificationService.shared.cancel(taskID: task.id.uuidString) }
             modelContext.deleteLineIfAllTasksComplete(for: task)
         }
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     private func refreshBadge() async {

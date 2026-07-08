@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 import UIKit
 import Combine
+import WidgetKit
 
 // prd-update-01.md §3: free-form, persistent, Apple-Notes-style multi-line surface. Each committed
 // line is a `NoteLine`; pressing return (or tapping away from an edited line) commits/re-parses it
@@ -631,6 +632,7 @@ struct NoteView: View {
         }
         try? modelContext.save()
         await refreshBadge()
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     private func deleteLine(_ line: NoteLine) async {

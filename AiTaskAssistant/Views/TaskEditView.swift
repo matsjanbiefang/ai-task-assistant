@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import WidgetKit
 
 // swipe-design-concept.md §6 "Detail", matched directly against the "lime-v4" reference mockup
 // (real-device feedback, 2026-07-04): a gradient hero card (back chevron + edit pencil, big
@@ -413,12 +414,14 @@ struct TaskEditView: View {
         if task.isCompleted {
             modelContext.deleteLineIfAllTasksComplete(for: task)
         }
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     private func deleteTask() {
         Task { await NotificationService.shared.cancel(taskID: task.id.uuidString) }
         modelContext.delete(task)
         try? modelContext.save()
+        WidgetCenter.shared.reloadAllTimelines()
         dismiss()
     }
 }

@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import WidgetKit
 
 // Real-device feedback (2026-07-04): "leave tasks without date out of the calendar but add
 // another module 'Tasklist' where you add them. But you are still able to add a date, when they
@@ -58,6 +59,7 @@ struct TasklistView: View {
             Task { await NotificationService.shared.cancel(taskID: task.id.uuidString) }
             modelContext.deleteLineIfAllTasksComplete(for: task)
         }
+        WidgetCenter.shared.reloadAllTimelines()
     }
 }
 
