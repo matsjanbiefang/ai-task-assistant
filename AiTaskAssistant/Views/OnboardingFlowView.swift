@@ -232,7 +232,10 @@ private func exampleCard(input: String, result: String, resultIcon: String) -> s
 // pages are intentionally left in English in every language for now — translating realistic,
 // natural-sounding sample notes per language is future work, not a quick lookup.
 private enum OnboardingCopy {
-    private enum Page {
+    // fileprivate (not private) — unlike top-level `private`, a *nested* `private` type is scoped
+    // strictly to its enclosing declaration's own body, not the whole file, so the sibling page
+    // structs below (SiriPage, ExamplesPage, etc.) couldn't otherwise reference this type at all.
+    fileprivate enum Page {
         case welcome, notes, examples, speech, siri, widgets, notifications
     }
 
