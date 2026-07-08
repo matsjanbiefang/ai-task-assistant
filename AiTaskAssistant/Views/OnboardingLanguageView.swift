@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 // prd-update-02.md §3: ask once, up front, instead of relying solely on per-line auto-detection —
 // per-line detection is unreliable on short fragments even between two languages, and that
@@ -18,6 +19,10 @@ struct OnboardingLanguageView: View {
     var onSelect: ((SupportedLanguage) -> Void)?
 
     @State private var internalSelected: SupportedLanguage?
+    // Real-device feedback: "select your language" header cycling through each selectable
+    // language's own translation of that phrase, 0.8s per language, looping — a quick, friendly
+    // way to signal "pick one of these" before the user has decided which language they read.
+    @State private var headerIndex = 0
 
     private var currentSelection: SupportedLanguage? {
         selected?.wrappedValue ?? internalSelected
@@ -32,6 +37,13 @@ struct OnboardingLanguageView: View {
             .filter(\.isSupportedByLanguagePack)
             .sorted { $0.displayName < $1.displayName }
     }
+
+    private static let selectLanguagePhrases: [String] = [
+        "Select your language", "Sprache auswählen", "Selecciona tu idioma", "Choisis ta langue",
+        "Seleziona la tua lingua", "Kies je taal", "Wybierz swój język", "Seleciona o teu idioma",
+    ]
+
+    private let headerTimer = Timer.publish(every: 0.8, on: .main, in: .common).autoconnect()
 
     var body: some View {
         Group {
@@ -48,17 +60,37 @@ struct OnboardingLanguageView: View {
         }
     }
 
-    // Real-device feedback: the plain iOS List (white rows, blue link-colored text) didn't match
-    // the rest of the app's paper/ink/lime look anywhere it appeared — restyled as themed rows in
-    // a plain scroll, same visual language as every other picker/menu in the app.
+    // Real-device feedback: vertically centered like every other onboarding page, and the plain
+    // iOS List (white rows, blue link-colored text) restyled as themed rows in a plain scroll —
+    // same visual language as every other picker/menu in the app.
     private var list: some View {
-        ScrollView {
-            VStack(spacing: 10) {
-                ForEach(sortedLanguages) { language in
-                    languageRow(language)
+        GeometryReader { proxy in
+            ScrollView {
+                VStack(spacing: 20) {
+                    Spacer(minLength: 0)
+                    Text(Self.selectLanguagePhrases[headerIndex])
+                        .font(Theme.Typography.screenTitle)
+                        .foregroundStyle(Theme.Color.ink)
+                        .contentTransition(.opacity)
+                        .id(headerIndex)
+                        .transition(.opacity)
+                        .onReceive(headerTimer) { _ in
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                headerIndex = (headerIndex + 1) % Self.selectLanguagePhrases.count
+                            }
+                        }
+                    VStack(spacing: 10) {
+                        ForEach(sortedLanguages) { language in
+                            languageRow(language)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    Spacer(minLength: 0)
                 }
+                .frame(maxWidth: .infinity)
+                .frame(minHeight: proxy.size.height)
+                .padding(.vertical, 24)
             }
-            .padding(.horizontal, 20)
         }
     }
 

@@ -9,21 +9,21 @@ import RevenueCat
 // - Language is the first page and starts with NOTHING selected (Continue disabled until a
 //   choice is made) — every later page's copy, including the illustrative examples and the Siri
 //   walkthrough, is localized live against whatever gets picked, via `OnboardingCopy` below.
-// - Notification permission is requested when tapping the shared Continue button on that page.
-//   If granted, the flow goes straight to a shared final page. If denied, an extra "here's why
-//   this helps" page is inserted first, then the same final page.
+// - Notification permission is requested when tapping the shared Continue button on that page,
+//   then the flow always advances to a shared final page regardless of grant/deny — the
+//   permission page's own copy explains both "why this helps" and "you can turn it on later",
+//   folded into one screen rather than split across two.
 // - A paywall page (previously missing from onboarding entirely) sits before notifications, with
 //   its own "Start Free Trial" action and a "Maybe Later" skip via the shared Continue button.
 struct OnboardingFlowView: View {
     var onFinish: (SupportedLanguage) -> Void
 
     private enum Page: Int, CaseIterable {
-        case language, welcome, notes, examples, speech, siri, widgets, paywall, notifications, notificationsValue, final
+        case language, welcome, notes, examples, speech, siri, widgets, paywall, notifications, final
     }
 
     @State private var page: Page = .language
     @State private var selectedLanguage: SupportedLanguage?
-    @State private var notificationsGranted: Bool?
 
     private var language: SupportedLanguage { selectedLanguage ?? .en }
 
@@ -40,7 +40,6 @@ struct OnboardingFlowView: View {
                 WidgetsPage(language: language).tag(Page.widgets)
                 OnboardingPaywallPage(language: language, onAdvance: { advance() }).tag(Page.paywall)
                 NotificationsPage(language: language).tag(Page.notifications)
-                NotificationsValuePage(language: language).tag(Page.notificationsValue)
                 FinalPage(language: language).tag(Page.final)
             }
             .tabViewStyle(.page(indexDisplayMode: .always))
@@ -77,12 +76,7 @@ struct OnboardingFlowView: View {
 
     private func advance() {
         if page == .notifications {
-            Task {
-                let granted = await NotificationService.shared.requestPermission()
-                notificationsGranted = granted
-                withAnimation { page = granted ? .final : .notificationsValue }
-            }
-            return
+            Task { _ = await NotificationService.shared.requestPermission() }
         }
         if isLastPage {
             onFinish(language)
@@ -231,12 +225,23 @@ private struct OnboardingPaywallPage: View {
     @State private var isPurchasing = false
     @State private var errorMessage: String?
 
+    // Real-device feedback: restyled to match a reference paywall's layout order — feature
+    // checklist, then two stacked pricing cards with a badge on the recommended one, then the
+    // trial CTA — same structure as the standalone PaywallView (Settings), just without its
+    // NavigationStack/toolbar chrome since this is a TabView page, not a sheet.
+    private var sortedPackages: [Package] {
+        (subscriptions.offering?.availablePackages ?? []).sorted {
+            $0.packageType == .annual && $1.packageType != .annual
+        }
+    }
+
     var body: some View {
         let copy = OnboardingCopy.text(for: .paywall, in: language)
         OnboardingPageLayout(icon: "sparkle", title: copy.title, subtitle: copy.subtitle) {
             VStack(spacing: 14) {
-                ForEach(subscriptions.offering?.availablePackages ?? [], id: \.identifier) { package in
-                    packageRow(package)
+                featureList
+                ForEach(sortedPackages, id: \.identifier) { package in
+                    packageCard(package)
                 }
                 if let errorMessage {
                     Text(errorMessage)
@@ -267,24 +272,51 @@ private struct OnboardingPaywallPage: View {
         }
     }
 
-    private func packageRow(_ package: Package) -> some View {
+    private var featureList: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            featureRow("infinity", "Unlimited active tasks")
+            featureRow("square.grid.2x2.fill", "Every Home Screen and Lock Screen widget")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func featureRow(_ icon: String, _ text: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .foregroundStyle(Theme.Color.limeDeep)
+                .frame(width: 18)
+            Text(text)
+                .font(Theme.Typography.body(14))
+                .foregroundStyle(Theme.Color.ink)
+        }
+    }
+
+    private func packageCard(_ package: Package) -> some View {
         let isSelected = selected?.identifier == package.identifier
+        let isAnnual = package.packageType == .annual
         return Button {
             selected = package
         } label: {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(package.storeProduct.localizedTitle)
-                        .font(Theme.Typography.body(15, weight: .semibold))
-                        .foregroundStyle(Theme.Color.ink)
-                    Text(package.storeProduct.localizedPriceString)
-                        .font(Theme.Typography.meta)
-                        .foregroundStyle(Theme.Color.mutedGrey)
+            VStack(alignment: .leading, spacing: 4) {
+                if isAnnual {
+                    HStack {
+                        Spacer()
+                        Text("Best Value")
+                            .font(Theme.Typography.meta.weight(.bold))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(Theme.Color.lime, in: Capsule())
+                            .foregroundStyle(Theme.Color.ink)
+                    }
                 }
-                Spacer()
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(isSelected ? Theme.Color.limeDeep : Theme.Color.mutedGrey)
+                Text(package.storeProduct.localizedTitle)
+                    .font(Theme.Typography.body(15, weight: .semibold))
+                    .foregroundStyle(Theme.Color.ink)
+                Text(package.storeProduct.localizedPriceString)
+                    .font(Theme.Typography.display(20, weight: .bold))
+                    .foregroundStyle(Theme.Color.ink)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(14)
             .background(SwiftUI.Color.white)
             .overlay(
@@ -318,15 +350,6 @@ private struct NotificationsPage: View {
     var body: some View {
         let copy = OnboardingCopy.text(for: .notifications, in: language)
         OnboardingPageLayout(icon: "bell.badge.fill", title: copy.title, subtitle: copy.subtitle) { EmptyView() }
-    }
-}
-
-// Only reached if the user declines notifications on the previous page.
-private struct NotificationsValuePage: View {
-    let language: SupportedLanguage
-    var body: some View {
-        let copy = OnboardingCopy.text(for: .notificationsValue, in: language)
-        OnboardingPageLayout(icon: "bell.slash", title: copy.title, subtitle: copy.subtitle) { EmptyView() }
     }
 }
 
@@ -374,7 +397,7 @@ private func exampleCard(input: String, result: String, resultIcon: String) -> s
 // on-device yet in those languages. Flagged here rather than silently overclaiming.
 private enum OnboardingCopy {
     fileprivate enum Page {
-        case welcome, notes, examples, speech, siri, widgets, paywall, notifications, notificationsValue, final
+        case welcome, notes, examples, speech, siri, widgets, paywall, notifications, final
     }
 
     private struct Copy { let title: String; let subtitle: String }
@@ -574,24 +597,14 @@ private enum OnboardingCopy {
             "pt": Copy(title: "Desbloqueia o TaskMind Pro", subtitle: "Tarefas ilimitadas e todos os widgets, com um teste gratuito de 1 semana."),
         ],
         .notifications: [
-            "en": Copy(title: "Never miss a due date", subtitle: "TaskMind can remind you before a task is due. You can change this anytime in Settings."),
-            "de": Copy(title: "Verpasse nie wieder einen Termin", subtitle: "TaskMind kann dich erinnern, bevor eine Aufgabe fällig ist. Du kannst das jederzeit in den Einstellungen ändern."),
-            "es": Copy(title: "No te pierdas ninguna fecha límite", subtitle: "TaskMind puede recordarte antes de que venza una tarea. Puedes cambiar esto en cualquier momento en Ajustes."),
-            "fr": Copy(title: "Ne rate plus jamais une échéance", subtitle: "TaskMind peut te rappeler avant qu'une tâche arrive à échéance. Tu peux modifier cela à tout moment dans les réglages."),
-            "it": Copy(title: "Non perdere mai una scadenza", subtitle: "TaskMind può ricordarti prima che un'attività scada. Puoi modificarlo in qualsiasi momento nelle Impostazioni."),
-            "nl": Copy(title: "Mis nooit meer een deadline", subtitle: "TaskMind kan je herinneren voordat een taak vervalt. Je kunt dit op elk moment wijzigen in Instellingen."),
-            "pl": Copy(title: "Nigdy nie przegap terminu", subtitle: "TaskMind może przypomnieć Ci, zanim zadanie stanie się wymagalne. Możesz to zmienić w dowolnym momencie w Ustawieniach."),
-            "pt": Copy(title: "Nunca percas um prazo", subtitle: "O TaskMind pode lembrar-te antes de uma tarefa vencer. Podes alterar isto a qualquer momento nas Definições."),
-        ],
-        .notificationsValue: [
-            "en": Copy(title: "You can always turn this on later", subtitle: "Reminders help you catch a task before it's due. If you change your mind, enable notifications anytime in Settings."),
-            "de": Copy(title: "Du kannst das jederzeit später aktivieren", subtitle: "Erinnerungen helfen dir, eine Aufgabe rechtzeitig zu erledigen. Du kannst Benachrichtigungen jederzeit in den Einstellungen aktivieren."),
-            "es": Copy(title: "Siempre puedes activarlo más tarde", subtitle: "Los recordatorios te ayudan a no perderte una tarea antes de su vencimiento. Si cambias de opinión, activa las notificaciones cuando quieras en Ajustes."),
-            "fr": Copy(title: "Tu peux toujours l'activer plus tard", subtitle: "Les rappels t'aident à ne pas manquer une tâche avant son échéance. Si tu changes d'avis, active les notifications à tout moment dans les réglages."),
-            "it": Copy(title: "Puoi sempre attivarlo più tardi", subtitle: "I promemoria ti aiutano a non perdere un'attività prima della scadenza. Se cambi idea, attiva le notifiche in qualsiasi momento nelle Impostazioni."),
-            "nl": Copy(title: "Je kunt dit later altijd inschakelen", subtitle: "Herinneringen helpen je een taak op tijd af te ronden. Als je van gedachten verandert, kun je meldingen op elk moment inschakelen in Instellingen."),
-            "pl": Copy(title: "Zawsze możesz włączyć to później", subtitle: "Przypomnienia pomagają nie przegapić zadania przed terminem. Jeśli zmienisz zdanie, możesz włączyć powiadomienia w dowolnym momencie w Ustawieniach."),
-            "pt": Copy(title: "Podes sempre ativar isto mais tarde", subtitle: "Os lembretes ajudam-te a não perder uma tarefa antes do prazo. Se mudares de ideias, ativa as notificações a qualquer momento nas Definições."),
+            "en": Copy(title: "Stay on top of due dates", subtitle: "TaskMind can remind you before a task is due. If you'd rather not right now, you can always enable notifications later in Settings."),
+            "de": Copy(title: "Behalte Fälligkeiten im Blick", subtitle: "TaskMind kann dich erinnern, bevor eine Aufgabe fällig ist. Falls du das gerade nicht möchtest, kannst du Benachrichtigungen jederzeit später in den Einstellungen aktivieren."),
+            "es": Copy(title: "Mantente al tanto de tus fechas límite", subtitle: "TaskMind puede recordarte antes de que venza una tarea. Si prefieres no hacerlo ahora, siempre puedes activar las notificaciones más tarde en Ajustes."),
+            "fr": Copy(title: "Reste à jour sur tes échéances", subtitle: "TaskMind peut te rappeler avant qu'une tâche arrive à échéance. Si tu préfères ne pas le faire maintenant, tu peux toujours activer les notifications plus tard dans les réglages."),
+            "it": Copy(title: "Resta aggiornato sulle scadenze", subtitle: "TaskMind può ricordarti prima che un'attività scada. Se preferisci non farlo ora, puoi sempre attivare le notifiche più tardi nelle Impostazioni."),
+            "nl": Copy(title: "Blijf op de hoogte van deadlines", subtitle: "TaskMind kan je herinneren voordat een taak vervalt. Als je dit nu liever niet doet, kun je meldingen altijd later inschakelen in Instellingen."),
+            "pl": Copy(title: "Bądź na bieżąco z terminami", subtitle: "TaskMind może przypomnieć Ci, zanim zadanie stanie się wymagalne. Jeśli wolisz nie robić tego teraz, zawsze możesz włączyć powiadomienia później w Ustawieniach."),
+            "pt": Copy(title: "Fica por dentro dos prazos", subtitle: "O TaskMind pode lembrar-te antes de uma tarefa vencer. Se preferires não o fazer agora, podes sempre ativar as notificações mais tarde nas Definições."),
         ],
         .final: [
             "en": Copy(title: "You're all set", subtitle: "Start capturing tasks the way you think — just write, and TaskMind handles the rest."),

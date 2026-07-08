@@ -3,7 +3,13 @@ import RevenueCat
 
 // Phase 1 (RevenueCat): native paywall styled with the app's own design system rather than
 // RevenueCatUI's default, shown when a free-tier user hits the 5-task cap or taps a widget/Siri
-// upsell. Presents the "default" offering's monthly/annual packages.
+// upsell, or opens it directly from Settings.
+//
+// Real-device feedback: restructured to match a reference paywall's layout order — feature
+// checklist first, two stacked pricing cards (not a toggle) with a badge on the recommended one,
+// then the trial CTA, fine print, legal links, and an explicit "Continue with free version" skip
+// — while keeping TaskMind's own paper/ink/lime look rather than copying the reference's dark
+// theme.
 struct PaywallView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var subscriptions = SubscriptionService.shared
@@ -11,6 +17,12 @@ struct PaywallView: View {
     @State private var selected: Package?
     @State private var isPurchasing = false
     @State private var errorMessage: String?
+    @State private var legalPage: LegalPage?
+
+    private enum LegalPage: String, Identifiable {
+        case privacy = "Privacy Policy", terms = "Terms of Use"
+        var id: String { rawValue }
+    }
 
     var body: some View {
         NavigationStack {
@@ -25,7 +37,9 @@ struct PaywallView: View {
                             .foregroundStyle(.red)
                     }
                     purchaseButton
-                    restoreButton
+                    finePrint
+                    legalLinks
+                    continueFreeLink
                 }
                 .padding(20)
             }
@@ -36,6 +50,9 @@ struct PaywallView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") { dismiss() }
                 }
+            }
+            .sheet(item: $legalPage) { page in
+                PaywallLegalPlaceholderView(title: page.rawValue)
             }
         }
         .task {
@@ -77,36 +94,56 @@ struct PaywallView: View {
 
     private var packages: some View {
         VStack(spacing: 10) {
-            ForEach(subscriptions.offering?.availablePackages ?? [], id: \.identifier) { package in
-                packageRow(package)
+            ForEach(sortedPackages, id: \.identifier) { package in
+                packageCard(package)
             }
         }
     }
 
-    private func packageRow(_ package: Package) -> some View {
+    // Annual first (it's the one carrying the "Best Value" badge), matching the reference's
+    // top-to-bottom yearly-then-monthly order.
+    private var sortedPackages: [Package] {
+        (subscriptions.offering?.availablePackages ?? []).sorted {
+            $0.packageType == .annual && $1.packageType != .annual
+        }
+    }
+
+    private func packageCard(_ package: Package) -> some View {
         let isSelected = selected?.identifier == package.identifier
+        let isAnnual = package.packageType == .annual
         return Button {
             selected = package
         } label: {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(package.storeProduct.localizedTitle)
-                        .font(Theme.Typography.body(15, weight: .semibold))
-                        .foregroundStyle(Theme.Color.ink)
-                    Text(package.storeProduct.localizedPriceString)
-                        .font(Theme.Typography.meta)
-                        .foregroundStyle(Theme.Color.mutedGrey)
+            VStack(alignment: .leading, spacing: 4) {
+                if isAnnual {
+                    HStack {
+                        Spacer()
+                        Text("Best Value")
+                            .font(Theme.Typography.meta.weight(.bold))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(Theme.Color.lime, in: Capsule())
+                            .foregroundStyle(Theme.Color.ink)
+                    }
                 }
-                Spacer()
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(isSelected ? Theme.Color.limeDeep : Theme.Color.mutedGrey)
+                Text(package.storeProduct.localizedTitle)
+                    .font(Theme.Typography.body(15, weight: .semibold))
+                    .foregroundStyle(Theme.Color.ink)
+                Text(package.storeProduct.localizedPriceString)
+                    .font(Theme.Typography.display(22, weight: .bold))
+                    .foregroundStyle(Theme.Color.ink)
+                    + Text(isAnnual ? " / year" : " / month")
+                    .font(Theme.Typography.meta)
+                    .foregroundStyle(Theme.Color.mutedGrey)
             }
-            .padding(14)
-            .background(Theme.Color.paper)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(16)
+            .background(SwiftUI.Color.white)
             .overlay(
                 RoundedRectangle(cornerRadius: Theme.Metrics.cardRadius)
                     .stroke(isSelected ? Theme.Color.limeDeep : Theme.Color.hairline, lineWidth: isSelected ? 2 : 1)
             )
+            .clipShape(RoundedRectangle(cornerRadius: Theme.Metrics.cardRadius))
         }
         .buttonStyle(.plain)
     }
@@ -129,13 +166,35 @@ struct PaywallView: View {
         .disabled(selected == nil || isPurchasing)
     }
 
-    private var restoreButton: some View {
-        Button("Restore Purchases") {
-            restore()
+    private var finePrint: some View {
+        Text("Subscription renews automatically unless cancelled at least 24 hours before the end of the current period. Manage in App Store Settings.")
+            .font(Theme.Typography.meta)
+            .foregroundStyle(Theme.Color.mutedGrey)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .multilineTextAlignment(.center)
+    }
+
+    private var legalLinks: some View {
+        HStack(spacing: 6) {
+            Spacer()
+            Button("Restore Purchases") { restore() }
+            Text("·").foregroundStyle(Theme.Color.mutedGrey)
+            Button("Privacy Policy") { legalPage = .privacy }
+            Text("·").foregroundStyle(Theme.Color.mutedGrey)
+            Button("Terms of Use") { legalPage = .terms }
+            Spacer()
         }
-        .font(Theme.Typography.body(14))
+        .font(Theme.Typography.meta)
         .foregroundStyle(Theme.Color.mutedGrey)
-        .frame(maxWidth: .infinity)
+        .buttonStyle(.plain)
+    }
+
+    private var continueFreeLink: some View {
+        Button("Continue with free version") { dismiss() }
+            .font(Theme.Typography.body(14))
+            .foregroundStyle(Theme.Color.mutedGrey)
+            .underline()
+            .frame(maxWidth: .infinity)
     }
 
     private func purchase() {
@@ -167,6 +226,28 @@ struct PaywallView: View {
                 errorMessage = error.localizedDescription
             }
         }
+    }
+}
+
+private struct PaywallLegalPlaceholderView: View {
+    let title: String
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Placeholder — the full \(title.lowercased()) will go here before this app is submitted for review.")
+                        .font(Theme.Typography.body(15))
+                        .foregroundStyle(Theme.Color.mutedGrey)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(20)
+            }
+            .background(Theme.Color.paper)
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
     }
 }
 
