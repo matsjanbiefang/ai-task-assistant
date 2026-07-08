@@ -154,24 +154,22 @@ struct TaskEditView: View {
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            // Real-device feedback: "Mark as done" should visibly greyscale the whole detail
-            // screen, not just the list card — the hero gradient swaps to a flat grey wash and
-            // every field row below follows via `task.isCompleted`, all under one `withAnimation`
-            // in `toggleCompletion()` so the change reads as active/immediate.
-            Group {
-                if task.isCompleted {
-                    Theme.Color.hairline.opacity(0.6)
-                } else {
+        // Real-device feedback: "Mark as done" should visibly greyscale the whole detail screen,
+        // not just the list card — the hero gradient swaps to a flat grey wash and every field
+        // row below follows via `task.isCompleted`, all under one `withAnimation` in
+        // `toggleCompletion()` so the change reads as active/immediate. The ViewBuilder form of
+        // `.background` (a closure, not a ShapeStyle) is used here since the two branches
+        // (Color vs. LinearGradient) don't share a common ShapeStyle-conforming type.
+        .background {
+            RoundedRectangle(cornerRadius: Theme.Metrics.heroCardRadius, style: .continuous)
+                .fill(task.isCompleted ? AnyShapeStyle(Theme.Color.hairline.opacity(0.6)) : AnyShapeStyle(
                     LinearGradient(
                         colors: [Theme.Color.skyPaleWash, Theme.Color.lime],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
-                }
-            },
-            in: RoundedRectangle(cornerRadius: Theme.Metrics.heroCardRadius, style: .continuous)
-        )
+                ))
+        }
     }
 
     // §4: categories are told apart by icon shape, never hue — the chip mirrors that everywhere
