@@ -6,7 +6,7 @@ import RevenueCat
 // offering identifier ("default") are configured in the RevenueCat dashboard for the "TaskMind AI"
 // project, project 2277d68b.
 @MainActor
-final class SubscriptionService: ObservableObject {
+final class SubscriptionService: NSObject, ObservableObject {
     static let shared = SubscriptionService()
 
     /// Free tier: capped at 5 active (non-completed) tasks, no widgets. Everything else is free.
@@ -22,7 +22,7 @@ final class SubscriptionService: ObservableObject {
     @Published private(set) var isPremium = false
     @Published private(set) var offering: Offering?
 
-    private init() {}
+    private override init() {}
 
     func configure() {
         Purchases.logLevel = .warn
