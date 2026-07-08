@@ -115,7 +115,11 @@ struct SettingsView: View {
                     sectionHeader("Subscription")
                 } footer: {
                     if let restoreError {
-                        sectionFooter(restoreError)
+                        // Dynamic system error text — not run through LocalizedStringKey lookup,
+                        // unlike the static footer strings below.
+                        Text(restoreError)
+                            .font(Theme.Typography.meta)
+                            .foregroundStyle(Theme.Color.mutedGrey)
                     } else if subscriptions.isPremium {
                         sectionFooter("TaskMind Pro is active.")
                     } else {
@@ -126,7 +130,10 @@ struct SettingsView: View {
                 Section {
                     ForEach(customCategories) { category in
                         Label {
-                            rowLabel(category.name)
+                            // Dynamic user-entered name — wrapped explicitly since a bare String
+                            // can't implicitly convert to LocalizedStringKey the way a literal
+                            // can; this just displays verbatim (no catalog entry will match it).
+                            rowLabel(LocalizedStringKey(category.name))
                         } icon: {
                             Image(systemName: category.iconName)
                         }
@@ -244,7 +251,9 @@ struct SettingsView: View {
             primaryLanguageCode = language.rawValue
         } label: {
             HStack {
-                rowLabel(language.displayName)
+                // Already localized by Locale itself (e.g. "Deutsch" on a German device) —
+                // wrapped for the same reason as the custom-category name above.
+                rowLabel(LocalizedStringKey(language.displayName))
                 Spacer()
                 if isSelected {
                     Image(systemName: "checkmark")
@@ -256,19 +265,25 @@ struct SettingsView: View {
 
     // Consistent Outfit font + ink color for every row label in this screen, instead of the
     // default system font/blue tint that made Settings look inconsistent with the rest of the app.
-    private func rowLabel(_ text: String) -> some View {
+    //
+    // `LocalizedStringKey`, not `String` — a plain String parameter would make `Text(text)` use
+    // the verbatim (non-localizing) initializer even when every call site passes a string
+    // literal, since Swift's literal-to-LocalizedStringKey inference only happens at the exact
+    // point a literal meets a LocalizedStringKey-typed parameter. This was silently defeating the
+    // whole String Catalog translation pass for every row that went through these three helpers.
+    private func rowLabel(_ text: LocalizedStringKey) -> some View {
         Text(text)
             .font(Theme.Typography.body(16))
             .foregroundStyle(Theme.Color.ink)
     }
 
-    private func sectionHeader(_ text: String) -> some View {
+    private func sectionHeader(_ text: LocalizedStringKey) -> some View {
         Text(text)
             .font(Theme.Typography.fieldLabel)
             .foregroundStyle(Theme.Color.mutedGrey)
     }
 
-    private func sectionFooter(_ text: String) -> some View {
+    private func sectionFooter(_ text: LocalizedStringKey) -> some View {
         Text(text)
             .font(Theme.Typography.meta)
             .foregroundStyle(Theme.Color.mutedGrey)

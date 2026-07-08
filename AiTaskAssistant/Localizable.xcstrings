@@ -4096,6 +4096,52 @@
           }
         }
       }
+    },
+    "Dates, times, places, and categories are detected automatically — try “add milk to shopping list”.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Daten, Uhrzeiten, Orte und Kategorien werden automatisch erkannt — probier „milch zur einkaufsliste hinzufügen“."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Las fechas, horas, lugares y categorías se detectan automáticamente — prueba «añadir leche a la lista de la compra»."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les dates, heures, lieux et catégories sont détectés automatiquement — essaie « ajoute du lait à la liste de courses »."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Date, orari, luoghi e categorie vengono rilevati automaticamente — prova «aggiungi latte alla lista della spesa»."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Datums, tijden, plaatsen en categorieën worden automatisch herkend — probeer \"voeg melk toe aan de boodschappenlijst\"."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Daty, godziny, miejsca i kategorie są wykrywane automatycznie — spróbuj „dodaj mleko do listy zakupów”."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Datas, horas, locais e categorias são detetados automaticamente — experimenta «adiciona leite à lista de compras»."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

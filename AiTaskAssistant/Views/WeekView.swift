@@ -55,7 +55,10 @@ struct WeekView: View {
                 .padding(.bottom, 24)
             }
             .background(Theme.Color.paper)
-            .navigationTitle(activeFilter?.headerLabel ?? "Week")
+            // .navigationTitle has both a String and a LocalizedStringKey overload; since
+            // `headerLabel` is typed String, Swift picks the non-localizing one by default —
+            // wrapped explicitly so this actually goes through the String Catalog.
+            .navigationTitle(LocalizedStringKey(activeFilter?.headerLabel ?? "Week"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 if activeFilter != nil {

@@ -176,7 +176,9 @@ struct TaskEditView: View {
     // else it appears (Notebook row, Week card meta line, Week legend).
     // MARK: - Field rows
 
-    private func fieldRow(label: String, value: String, isPlaceholder: Bool, action: @escaping () -> Void) -> some View {
+    // `label` is `LocalizedStringKey` — see the same fix/comment in NoteView's statPill/filterChip
+    // and SettingsView's rowLabel; `value` stays `String` since it's always dynamic task data.
+    private func fieldRow(label: LocalizedStringKey, value: String, isPlaceholder: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack {
                 Text(label)

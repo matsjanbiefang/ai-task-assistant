@@ -418,18 +418,24 @@ struct NoteView: View {
         return false
     }
 
+    // Real-device feedback: "filter needs to be centralized" — was left-aligned via a trailing
+    // Spacer(); centered as a group instead.
     private var filterBar: some View {
         HStack(spacing: 8) {
             filterChip(.calendar, label: "Calendar", icon: "calendar")
             filterChip(.tasks, label: "Tasks", icon: "checkmark.circle")
             filterChip(.shopping, label: "Shopping", icon: "cart")
-            Spacer()
         }
+        .frame(maxWidth: .infinity)
         .padding(.horizontal, 20)
         .padding(.bottom, 8)
     }
 
-    private func filterChip(_ category: NoteFilterCategory, label: String, icon: String) -> some View {
+    // `label` is `LocalizedStringKey`, not `String` — a plain String parameter would make
+    // `Text(label)` use the verbatim (non-localizing) initializer even when every call site
+    // passes a string literal, since Swift's literal-to-LocalizedStringKey inference only
+    // happens at the exact point a literal meets a LocalizedStringKey-typed parameter.
+    private func filterChip(_ category: NoteFilterCategory, label: LocalizedStringKey, icon: String) -> some View {
         let isActive = activeFilters.contains(category)
         return Button {
             if isActive {
@@ -578,7 +584,8 @@ struct NoteView: View {
         }
     }
 
-    private func statPill(count: Int, label: String, action: @escaping () -> Void) -> some View {
+    // Same LocalizedStringKey fix as `filterChip` above.
+    private func statPill(count: Int, label: LocalizedStringKey, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 5) {
                 Text("\(count)")

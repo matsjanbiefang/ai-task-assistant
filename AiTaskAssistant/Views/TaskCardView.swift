@@ -112,7 +112,8 @@ struct TaskCardView: View {
 // Shared by Week, Tasklist, and Shopping list — a plain icon + muted message, centered.
 struct EmptyStateView: View {
     let icon: String
-    let message: String
+    // LocalizedStringKey, not String — see the same fix/comment on NoteView's statPill.
+    let message: LocalizedStringKey
 
     var body: some View {
         VStack(spacing: 8) {
