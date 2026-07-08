@@ -78,7 +78,7 @@ enum Theme {
         switch category {
         case "work": return "briefcase.fill"
         case "personal": return "house.fill"
-        case "health": return "dumbbell.fill"
+        case "health": return "heart.fill"
         case "shopping": return "cart.fill"
         case "finance": return "dollarsign.circle.fill"
         case "other": return "tag.fill"
@@ -97,10 +97,6 @@ enum Theme {
         default: return category.capitalized
         }
     }
-
-    /// The legend under the Week strip (§4) — every category the app can assign, in a stable
-    /// order, so the icon system is self-documenting.
-    static let legendCategories = ["work", "personal", "health", "shopping", "finance", "other"]
 }
 
 private extension SwiftUI.Color {

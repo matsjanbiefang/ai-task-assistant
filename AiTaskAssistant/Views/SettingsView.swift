@@ -10,9 +10,6 @@ struct SettingsView: View {
     @AppStorage("primaryLanguageCode") private var primaryLanguageCode = "en"
     @AppStorage("notificationsEnabled") private var notificationsEnabled = true
     @AppStorage("reminderLeadTimeMinutes") private var reminderLeadTimeMinutes = 15
-    // Phase 2 (PostHog): read by AnalyticsService before sending any event. Default on, same as
-    // notifications — an explicit opt-out rather than an opt-in.
-    @AppStorage("shareAnalyticsEnabled") private var shareAnalyticsEnabled = true
 
     @Environment(\.modelContext) private var modelContext
     @ObservedObject private var subscriptions = SubscriptionService.shared
@@ -20,6 +17,9 @@ struct SettingsView: View {
     @State private var showCustomReminderEditor = false
     @State private var isRestoringPurchases = false
     @State private var restoreError: String?
+    @State private var showPaywall = false
+    @State private var showAddCategory = false
+    @Query(sort: \CustomCategory.createdAt) private var customCategories: [CustomCategory]
 
     // Real-device feedback: "reduce note taking language to the supported languages" — see
     // `SupportedLanguage.isSupportedByLanguagePack`'s doc comment for why the other 16 of 24 EU
@@ -50,9 +50,9 @@ struct SettingsView: View {
                         languageRow(language)
                     }
                 } header: {
-                    Text("Note-taking language")
+                    Text("Language")
                 } footer: {
-                    Text("Used to recognize dates, times, places, and categories in what you type or say.")
+                    Text("Changes the app's language, and what TaskMind expects when recognizing dates, times, places, and categories in what you type or say.")
                 }
 
                 Section {
@@ -83,6 +83,16 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    // Real-device feedback: "Paywall is fully missing" — the only way to reach it
+                    // was accidentally hitting the 5-task cap. Free users now get an explicit,
+                    // always-visible way to open it.
+                    if !subscriptions.isPremium {
+                        Button {
+                            showPaywall = true
+                        } label: {
+                            Text("Upgrade to TaskMind Pro")
+                        }
+                    }
                     Button {
                         restorePurchases()
                     } label: {
@@ -108,9 +118,19 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Toggle("Share Analytics", isOn: $shareAnalyticsEnabled)
+                    ForEach(customCategories) { category in
+                        Label(category.name, systemImage: category.iconName)
+                    }
+                    .onDelete(perform: deleteCustomCategories)
+                    Button {
+                        showAddCategory = true
+                    } label: {
+                        Text("Add Category…")
+                    }
+                } header: {
+                    Text("Categories")
                 } footer: {
-                    Text("Helps us understand which features are used, without ever sharing your task or note content. You can turn this off anytime.")
+                    Text("Custom categories appear alongside Work, Personal, Health, Shopping, Finance, and Other when categorizing a task.")
                 }
 
                 Section("About") {
@@ -168,6 +188,12 @@ struct SettingsView: View {
                     .presentationDetents([.medium])
                     .presentationDragIndicator(.visible)
             }
+            .sheet(isPresented: $showPaywall) {
+                PaywallView()
+            }
+            .sheet(isPresented: $showAddCategory) {
+                AddCustomCategoryView()
+            }
         }
     }
 
@@ -192,7 +218,6 @@ struct SettingsView: View {
         } label: {
             HStack {
                 Text(language.displayName)
-                    .font(Theme.Typography.body(16))
                     .foregroundStyle(Theme.Color.ink)
                 Spacer()
                 if isSelected {
@@ -220,6 +245,11 @@ struct SettingsView: View {
             }
             isRestoringPurchases = false
         }
+    }
+
+    private func deleteCustomCategories(at offsets: IndexSet) {
+        for index in offsets { modelContext.delete(customCategories[index]) }
+        try? modelContext.save()
     }
 
     private func deleteAllData() {
@@ -320,5 +350,5 @@ private struct CustomReminderView: View {
 
 #Preview {
     SettingsView()
-        .modelContainer(for: [TaskItem.self, NoteLine.self, ShoppingItem.self, EntityMemory.self], inMemory: true)
+        .modelContainer(for: [TaskItem.self, NoteLine.self, ShoppingItem.self, EntityMemory.self, CustomCategory.self], inMemory: true)
 }

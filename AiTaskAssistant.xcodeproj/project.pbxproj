@@ -52,6 +52,8 @@
 		A1000046 /* SharedModelContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000050 /* SharedModelContainer.swift */; };
 		A1000047 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = A2000053 /* Localizable.xcstrings */; };
 		A1000048 /* OnboardingFlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000054 /* OnboardingFlowView.swift */; };
+		A1000049 /* CustomCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000055 /* CustomCategory.swift */; };
+		A1000050 /* CustomCategoryPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000056 /* CustomCategoryPicker.swift */; };
 		C1000001 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = C3000001 /* RevenueCat */; };
 		D1000001 /* AiTaskAssistantWidgetsBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2000002 /* AiTaskAssistantWidgetsBundle.swift */; };
 		D1000002 /* TaskWidgetData.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2000003 /* TaskWidgetData.swift */; };
@@ -60,6 +62,7 @@
 		D1000005 /* NoteLine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000025 /* NoteLine.swift */; };
 		D1000006 /* EntityMemory.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000035 /* EntityMemory.swift */; };
 		D1000007 /* ShoppingItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000041 /* ShoppingItem.swift */; };
+		D1000008 /* CustomCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000055 /* CustomCategory.swift */; };
 		D1000010 /* AiTaskAssistantWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D2000010 /* AiTaskAssistantWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
@@ -113,6 +116,8 @@
 		A2000052 /* AiTaskAssistant.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AiTaskAssistant.entitlements; sourceTree = "<group>"; };
 		A2000053 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		A2000054 /* OnboardingFlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingFlowView.swift; sourceTree = "<group>"; };
+		A2000055 /* CustomCategory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomCategory.swift; sourceTree = "<group>"; };
+		A2000056 /* CustomCategoryPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomCategoryPicker.swift; sourceTree = "<group>"; };
 		D2000002 /* AiTaskAssistantWidgetsBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AiTaskAssistantWidgetsBundle.swift; sourceTree = "<group>"; };
 		D2000003 /* TaskWidgetData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskWidgetData.swift; sourceTree = "<group>"; };
 		D2000004 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -231,6 +236,7 @@
 				A2000047 /* TasklistView.swift */,
 				A2000049 /* PaywallView.swift */,
 				A2000054 /* OnboardingFlowView.swift */,
+				A2000056 /* CustomCategoryPicker.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -243,6 +249,7 @@
 				A2000025 /* NoteLine.swift */,
 				A2000035 /* EntityMemory.swift */,
 				A2000041 /* ShoppingItem.swift */,
+				A2000055 /* CustomCategory.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -491,6 +498,8 @@
 				A1000045 /* PaywallView.swift in Sources */,
 				A1000046 /* SharedModelContainer.swift in Sources */,
 				A1000048 /* OnboardingFlowView.swift in Sources */,
+				A1000049 /* CustomCategory.swift in Sources */,
+				A1000050 /* CustomCategoryPicker.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -505,6 +514,7 @@
 				D1000005 /* NoteLine.swift in Sources */,
 				D1000006 /* EntityMemory.swift in Sources */,
 				D1000007 /* ShoppingItem.swift in Sources */,
+				D1000008 /* CustomCategory.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -541,7 +551,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = AiTaskAssistant/AiTaskAssistant.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 16;
+				CURRENT_PROJECT_VERSION = 17;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = AiTaskAssistant/Info.plist;
@@ -565,7 +575,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = AiTaskAssistant/AiTaskAssistant.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 16;
+				CURRENT_PROJECT_VERSION = 17;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = AiTaskAssistant/Info.plist;
@@ -588,7 +598,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 16;
+				CURRENT_PROJECT_VERSION = 17;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -606,7 +616,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 16;
+				CURRENT_PROJECT_VERSION = 17;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -737,7 +747,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = AiTaskAssistantWidgets/AiTaskAssistantWidgets.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 16;
+				CURRENT_PROJECT_VERSION = 17;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = AiTaskAssistantWidgets/Info.plist;
@@ -762,7 +772,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = AiTaskAssistantWidgets/AiTaskAssistantWidgets.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 16;
+				CURRENT_PROJECT_VERSION = 17;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = AiTaskAssistantWidgets/Info.plist;

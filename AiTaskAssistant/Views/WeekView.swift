@@ -45,7 +45,6 @@ struct WeekView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     if activeFilter == nil {
                         weekStrip
-                        legend
                         weekGroupedContent
                     } else {
                         filteredList(activeFilter!)
@@ -100,25 +99,6 @@ struct WeekView: View {
                         .background(Circle().fill(isToday ? Theme.Color.lime : SwiftUI.Color.clear))
                 }
                 .frame(maxWidth: .infinity)
-            }
-        }
-    }
-
-    // §4: "A small legend under the week strip spells out what each icon means, so the system is
-    // self-documenting the first time someone sees it."
-    private var legend: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 14) {
-                ForEach(Theme.legendCategories, id: \.self) { category in
-                    if let icon = Theme.categoryIcon(category) {
-                        HStack(spacing: 4) {
-                            Image(systemName: icon)
-                            Text(Theme.categoryLabel(category))
-                        }
-                        .font(Theme.Typography.meta)
-                        .foregroundStyle(Theme.Color.mutedGrey)
-                    }
-                }
             }
         }
     }
@@ -219,5 +199,5 @@ struct WeekView: View {
 
 #Preview {
     WeekView()
-        .modelContainer(for: [TaskItem.self, NoteLine.self, EntityMemory.self], inMemory: true)
+        .modelContainer(for: [TaskItem.self, NoteLine.self, EntityMemory.self, CustomCategory.self], inMemory: true)
 }

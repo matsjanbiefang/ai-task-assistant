@@ -39,7 +39,7 @@
   },
   "categoryKeywords": {
     "work": ["praca", "spotkanie", "projekt", "klient", "biuro"],
-    "health": ["lekarz", "dentysta", "wizyta", "siłownia", "zdrowie"],
+    "health": ["lekarz", "dentysta", "siłownia", "zdrowie"],
     "shopping": ["kupić", "zakupy", "sklep"],
     "finance": ["zapłacić", "faktura", "bank", "podatki"]
   },

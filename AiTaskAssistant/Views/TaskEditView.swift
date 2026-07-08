@@ -14,10 +14,12 @@ struct TaskEditView: View {
     @Bindable var task: TaskItem
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Query(sort: \CustomCategory.createdAt) private var customCategories: [CustomCategory]
 
     @State private var isEditingTitle = false
     @State private var editingField: EditingField?
     @State private var showDeleteConfirmation = false
+    @State private var showAddCategory = false
     // Milestone 8: snapshot on appear so a future re-enable of EntityMemoryService.
     // recordCorrection can tell whether the user actually changed `place` (a ground-truth
     // correction) vs. leaving it as the engine extracted it.
@@ -100,6 +102,9 @@ struct TaskEditView: View {
         .sheet(item: $editingField) { field in
             editorSheet(for: field)
         }
+        .sheet(isPresented: $showAddCategory) {
+            AddCustomCategoryView()
+        }
     }
 
     // MARK: - Hero card
@@ -163,7 +168,7 @@ struct TaskEditView: View {
         Menu {
             categoryMenuItems
         } label: {
-            if let category = task.category, let icon = Theme.categoryIcon(category) {
+            if let category = task.category, let icon = Theme.categoryIcon(category, custom: customCategories) {
                 Label(Theme.categoryLabel(category), systemImage: icon)
                     .font(Theme.Typography.fieldLabel)
                     .padding(.horizontal, 12)
@@ -215,6 +220,18 @@ struct TaskEditView: View {
                     Text(Theme.categoryLabel(category.rawValue))
                 }
             }
+        }
+        ForEach(customCategories) { custom in
+            Button {
+                task.category = custom.name
+            } label: {
+                Label(custom.name, systemImage: custom.iconName)
+            }
+        }
+        Button {
+            showAddCategory = true
+        } label: {
+            Label("Add category…", systemImage: "plus")
         }
     }
 
@@ -428,5 +445,5 @@ struct TaskEditView: View {
 
 #Preview {
     TaskEditView(task: TaskItem(title: "Sample"))
-        .modelContainer(for: [TaskItem.self, NoteLine.self], inMemory: true)
+        .modelContainer(for: [TaskItem.self, NoteLine.self, CustomCategory.self], inMemory: true)
 }

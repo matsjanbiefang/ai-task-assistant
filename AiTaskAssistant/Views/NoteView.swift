@@ -20,6 +20,7 @@ struct NoteView: View {
     @AppStorage("primaryLanguageCode") private var primaryLanguageCode = "en"
     @Query(sort: \NoteLine.order) private var lines: [NoteLine]
     @Query private var allTasks: [TaskItem]
+    @Query(sort: \CustomCategory.createdAt) private var customCategories: [CustomCategory]
 
     @State private var editingTexts: [UUID: String] = [:]
     @State private var composeText = ""
@@ -66,10 +67,14 @@ struct NoteView: View {
                         composeRow
                             .id("compose")
                         // §6 Notebook: "Below the caret, a one-line hint makes this discoverable."
-                        Text("Dates, times, places, and categories are detected automatically — try “add milk to shopping list”.")
-                            .font(Theme.Typography.meta)
-                            .foregroundStyle(Theme.Color.mutedGrey)
-                            .padding(.top, 2)
+                        // Real-device feedback: only useful before there's anything to learn from —
+                        // hidden once a line exists or the user has started typing.
+                        if lines.isEmpty && composeText.isEmpty {
+                            Text("Dates, times, places, and categories are detected automatically — try “add milk to shopping list”.")
+                                .font(Theme.Typography.meta)
+                                .foregroundStyle(Theme.Color.mutedGrey)
+                                .padding(.top, 2)
+                        }
                         // Reserves scrollable room below the last row equal to the keyboard's
                         // own height. This is a deliberate belt-and-suspenders fix: even if a
                         // scrollTo call above lands slightly early/late relative to the keyboard's
@@ -320,6 +325,16 @@ struct NoteView: View {
                 .foregroundStyle(.orange)
         } else if !tasksForLine.isEmpty {
             HStack(spacing: 4) {
+                // Real-device feedback: a plain task with nothing else detected showed no icon at
+                // all, giving no visual sign the line had become a task (or anywhere to tap into
+                // it). This generic marker always renders as a floor underneath the field-specific
+                // icons below.
+                if !tasksForLine.contains(where: {
+                    $0.dueDate != nil || $0.dueTime != nil || $0.timeOfDay != nil || $0.place != nil
+                        || $0.details != nil || $0.linkedGroupID != nil || $0.category != nil || $0.priority != nil
+                }) {
+                    Image(systemName: "checkmark.circle")
+                }
                 if tasksForLine.contains(where: { $0.dueDate != nil }) {
                     Image(systemName: "calendar")
                 }
@@ -335,7 +350,7 @@ struct NoteView: View {
                 if tasksForLine.contains(where: { $0.linkedGroupID != nil }) {
                     Image(systemName: "link")
                 }
-                if let category = tasksForLine.compactMap(\.category).first, let icon = Theme.categoryIcon(category) {
+                if let category = tasksForLine.compactMap(\.category).first, let icon = Theme.categoryIcon(category, custom: customCategories) {
                     Image(systemName: icon)
                 }
                 if let priority = tasksForLine.compactMap(\.priority).first {
@@ -437,7 +452,20 @@ struct NoteView: View {
 
                 Spacer()
 
-                if focusedTarget != nil {
+                // Real-device feedback: while dictating, this button only dismissed the keyboard
+                // and left recording running in the background — tapping it read as "stop
+                // recording" (it's the only other control down here) but didn't actually do that.
+                // It now stops the recording too when one is in progress.
+                if isRecording {
+                    Button {
+                        Task { await toggleRecording() }
+                    } label: {
+                        Image(systemName: "keyboard.chevron.compact.down")
+                            .font(.title2)
+                            .foregroundStyle(Theme.Color.mutedGrey)
+                            .frame(width: 44, height: 44)
+                    }
+                } else if focusedTarget != nil {
                     Button {
                         focusedTarget = nil
                     } label: {
@@ -691,5 +719,5 @@ struct NoteView: View {
 
 #Preview {
     NoteView(activateDictation: .constant(false), showTasks: .constant(false))
-        .modelContainer(for: [TaskItem.self, NoteLine.self, EntityMemory.self, ShoppingItem.self], inMemory: true)
+        .modelContainer(for: [TaskItem.self, NoteLine.self, EntityMemory.self, ShoppingItem.self, CustomCategory.self], inMemory: true)
 }

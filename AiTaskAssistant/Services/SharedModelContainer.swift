@@ -9,7 +9,7 @@ enum SharedModelContainer {
     private static let appGroupID = "group.com.matsb.AiTaskAssistant"
 
     static func make() -> ModelContainer {
-        let schema = Schema([TaskItem.self, NoteLine.self, EntityMemory.self, ShoppingItem.self])
+        let schema = Schema([TaskItem.self, NoteLine.self, EntityMemory.self, ShoppingItem.self, CustomCategory.self])
         let storeURL = FileManager.default
             .containerURL(forSecurityApplicationGroupIdentifier: appGroupID)?
             .appendingPathComponent("AiTaskAssistant.sqlite")

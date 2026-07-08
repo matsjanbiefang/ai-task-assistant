@@ -37,7 +37,7 @@
   },
   "categoryKeywords": {
     "work": ["büro", "arbeit", "projekt", "kickoff"],
-    "health": ["arzt", "arzttermin", "arztbesuch", "hausarzt", "frauenarzt", "zahnarzt", "termin", "fitness", "krankenhaus"],
+    "health": ["arzt", "arzttermin", "arztbesuch", "hausarzt", "frauenarzt", "zahnarzt", "fitness", "krankenhaus"],
     "shopping": ["kaufen", "einkaufen"],
     "finance": ["rechnung", "bezahlen", "steuer"]
   },

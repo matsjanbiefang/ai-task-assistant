@@ -1,326 +1,326 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "Add a task to ${applicationName}" : {
+    "Add a note to ${applicationName}" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Füge eine Aufgabe zu ${applicationName} hinzu"
+            "value" : "Füge eine Notiz zu ${applicationName} hinzu"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Añade una tarea a ${applicationName}"
+            "value" : "Añade una nota a ${applicationName}"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ajoute une tâche à ${applicationName}"
+            "value" : "Ajoute une note à ${applicationName}"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aggiungi un'attività a ${applicationName}"
+            "value" : "Aggiungi una nota a ${applicationName}"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Voeg een taak toe aan ${applicationName}"
+            "value" : "Voeg een notitie toe aan ${applicationName}"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dodaj zadanie do ${applicationName}"
+            "value" : "Dodaj notatkę do ${applicationName}"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Adicionar uma tarefa ao ${applicationName}"
+            "value" : "Adicionar uma nota ao ${applicationName}"
           }
         }
       }
     },
-    "New task in ${applicationName}" : {
+    "New note in ${applicationName}" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Neue Aufgabe in ${applicationName}"
+            "value" : "Neue Notiz in ${applicationName}"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nueva tarea en ${applicationName}"
+            "value" : "Nueva nota en ${applicationName}"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nouvelle tâche dans ${applicationName}"
+            "value" : "Nouvelle note dans ${applicationName}"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nuova attività in ${applicationName}"
+            "value" : "Nuova nota in ${applicationName}"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nieuwe taak in ${applicationName}"
+            "value" : "Nieuwe notitie in ${applicationName}"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nowe zadanie w ${applicationName}"
+            "value" : "Nowa notatka w ${applicationName}"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nova tarefa no ${applicationName}"
+            "value" : "Nova nota no ${applicationName}"
           }
         }
       }
     },
-    "Remind me in ${applicationName}" : {
+    "Quick note for ${applicationName}" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Erinnere mich in ${applicationName}"
+            "value" : "Schnelle Notiz für ${applicationName}"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Recuérdame en ${applicationName}"
+            "value" : "Nota rápida para ${applicationName}"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Rappelle-moi dans ${applicationName}"
+            "value" : "Note rapide pour ${applicationName}"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ricordamelo in ${applicationName}"
+            "value" : "Nota rapida per ${applicationName}"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Herinner me in ${applicationName}"
+            "value" : "Snelle notitie voor ${applicationName}"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Przypomnij mi w ${applicationName}"
+            "value" : "Szybka notatka dla ${applicationName}"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lembra-me no ${applicationName}"
+            "value" : "Nota rápida para ${applicationName}"
           }
         }
       }
     },
-    "Add task" : {
+    "Add note" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aufgabe hinzufügen"
+            "value" : "Notiz hinzufügen"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Añadir tarea"
+            "value" : "Añadir nota"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ajouter une tâche"
+            "value" : "Ajouter une note"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aggiungi attività"
+            "value" : "Aggiungi nota"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Taak toevoegen"
+            "value" : "Notitie toevoegen"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dodaj zadanie"
+            "value" : "Dodaj notatkę"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Adicionar tarefa"
+            "value" : "Adicionar nota"
           }
         }
       }
     },
-    "Ready. What's your task?" : {
+    "Ready. What's on your mind?" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bereit. Was ist deine Aufgabe?"
+            "value" : "Bereit. Was hast du im Kopf?"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Listo. ¿Cuál es tu tarea?"
+            "value" : "Listo. ¿Qué tienes en mente?"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Prêt. Quelle est ta tâche ?"
+            "value" : "Prêt. À quoi penses-tu ?"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pronto. Qual è il tuo compito?"
+            "value" : "Pronto. A cosa stai pensando?"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Klaar. Wat is je taak?"
+            "value" : "Klaar. Wat heb je in gedachten?"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gotowe. Jakie jest twoje zadanie?"
+            "value" : "Gotowe. Co masz na myśli?"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pronto. Qual é a tua tarefa?"
+            "value" : "Pronto. Em que estás a pensar?"
           }
         }
       }
     },
-    "Add a task" : {
+    "Add a note" : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Eine Aufgabe hinzufügen"
+            "value" : "Eine Notiz hinzufügen"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Añadir una tarea"
+            "value" : "Añadir una nota"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ajouter une tâche"
+            "value" : "Ajouter une note"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aggiungi un'attività"
+            "value" : "Aggiungi una nota"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Voeg een taak toe"
+            "value" : "Voeg een notitie toe"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dodaj zadanie"
+            "value" : "Dodaj notatkę"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Adicionar uma tarefa"
+            "value" : "Adicionar uma nota"
           }
         }
       }
     },
-    "Add a new task to your AI Task Assistant using voice or text." : {
+    "Add a new note to TaskMind using voice or text." : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Füge deinem AI Task Assistant per Sprache oder Text eine neue Aufgabe hinzu."
+            "value" : "Füge TaskMind per Sprache oder Text eine neue Notiz hinzu."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Añade una nueva tarea a tu AI Task Assistant usando voz o texto."
+            "value" : "Añade una nueva nota a TaskMind usando voz o texto."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ajoute une nouvelle tâche à ton AI Task Assistant par la voix ou le texte."
+            "value" : "Ajoute une nouvelle note à TaskMind par la voix ou le texte."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aggiungi una nuova attività al tuo AI Task Assistant tramite voce o testo."
+            "value" : "Aggiungi una nuova nota a TaskMind tramite voce o testo."
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Voeg via spraak of tekst een nieuwe taak toe aan je AI Task Assistant."
+            "value" : "Voeg via spraak of tekst een nieuwe notitie toe aan TaskMind."
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dodaj nowe zadanie do AI Task Assistant za pomocą głosu lub tekstu."
+            "value" : "Dodaj nową notatkę do TaskMind za pomocą głosu lub tekstu."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Adiciona uma nova tarefa ao teu AI Task Assistant por voz ou texto."
+            "value" : "Adiciona uma nova nota ao TaskMind por voz ou texto."
           }
         }
       }

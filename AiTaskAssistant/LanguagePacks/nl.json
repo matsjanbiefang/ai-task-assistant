@@ -39,7 +39,7 @@
   },
   "categoryKeywords": {
     "work": ["werk", "vergadering", "project", "klant", "kantoor"],
-    "health": ["dokter", "tandarts", "afspraak", "sportschool", "gezondheid"],
+    "health": ["dokter", "tandarts", "sportschool", "gezondheid"],
     "shopping": ["kopen", "boodschappen", "winkel"],
     "finance": ["betalen", "factuur", "bank", "belasting"]
   },

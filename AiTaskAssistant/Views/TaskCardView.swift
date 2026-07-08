@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 // Extracted from WeekView (real-device feedback, 2026-07-04) so both Week and the new Tasklist
 // module render tasks identically — a rounded card with a lime/grey open-vs-done accent bar,
@@ -8,6 +9,8 @@ struct TaskCardView: View {
     let task: TaskItem
     var onToggleCompletion: () -> Void
     var onTap: () -> Void
+
+    @Query(sort: \CustomCategory.createdAt) private var customCategories: [CustomCategory]
 
     var body: some View {
         HStack(spacing: 0) {
@@ -38,7 +41,7 @@ struct TaskCardView: View {
             }
             .padding(12)
         }
-        .background(SwiftUI.Color.white)
+        .background(task.isCompleted ? Theme.Color.hairline.opacity(0.35) : SwiftUI.Color.white)
         .clipShape(RoundedRectangle(cornerRadius: Theme.Metrics.cardRadius, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: Theme.Metrics.cardRadius, style: .continuous)
@@ -51,7 +54,7 @@ struct TaskCardView: View {
     @ViewBuilder
     private var metaLine: some View {
         HStack(spacing: 8) {
-            if let category = task.category, let icon = Theme.categoryIcon(category) {
+            if let category = task.category, let icon = Theme.categoryIcon(category, custom: customCategories) {
                 Image(systemName: icon)
             }
             if let date = task.dueDate, let endDate = task.dueEndDate {

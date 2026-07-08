@@ -12,6 +12,13 @@
 	<string>6.0</string>
 	<key>CFBundleName</key>
 	<string>$(PRODUCT_NAME)</string>
+	<!-- Real-device feedback: Siri couldn't reliably find the app and the invocation phrase was
+	     hard to say — both trace back to ${applicationName} resolving to this key (falls back to
+	     CFBundleName when unset), which had been the Xcode target name "AiTaskAssistant" rather
+	     than a short, easy-to-pronounce word. "TaskMind" matches what onboarding/marketing already
+	     call the app. -->
+	<key>CFBundleDisplayName</key>
+	<string>TaskMind</string>
 	<key>CFBundlePackageType</key>
 	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
 	<key>CFBundleShortVersionString</key>

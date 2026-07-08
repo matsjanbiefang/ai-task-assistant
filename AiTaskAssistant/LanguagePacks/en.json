@@ -45,7 +45,7 @@
   },
   "categoryKeywords": {
     "work": ["work", "meeting", "deadline", "project", "client", "office", "kickoff"],
-    "health": ["doctor", "dentist", "gym", "workout", "appointment", "fitness", "membership", "hospital"],
+    "health": ["doctor", "dentist", "gym", "workout", "fitness", "membership", "hospital"],
     "shopping": ["buy", "groceries", "shopping", "store"],
     "finance": ["pay", "bill", "invoice", "bank", "tax"]
   },

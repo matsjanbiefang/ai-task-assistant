@@ -36,6 +36,7 @@ struct OnboardingLanguageView: View {
             } else {
                 NavigationStack {
                     list
+                        .background(Theme.Color.paper)
                         .navigationTitle("Choose your language")
                         .safeAreaInset(edge: .bottom) { continueButton }
                 }
@@ -48,11 +49,17 @@ struct OnboardingLanguageView: View {
         }
     }
 
+    // Real-device feedback: the plain iOS List (white rows, blue link-colored text) didn't match
+    // the rest of the app's paper/ink/lime look anywhere it appeared — restyled as themed rows in
+    // a plain scroll, same visual language as every other picker/menu in the app.
     private var list: some View {
-        List {
-            ForEach(sortedLanguages) { language in
-                languageRow(language)
+        ScrollView {
+            VStack(spacing: 10) {
+                ForEach(sortedLanguages) { language in
+                    languageRow(language)
+                }
             }
+            .padding(.horizontal, 20)
         }
     }
 
@@ -65,14 +72,26 @@ struct OnboardingLanguageView: View {
         } label: {
             HStack {
                 Text(language.displayName)
-                    .foregroundStyle(.primary)
+                    .font(Theme.Typography.body(16, weight: isSelected ? .semibold : .regular))
+                    .foregroundStyle(Theme.Color.ink)
                 Spacer()
                 if isSelected {
                     Image(systemName: "checkmark")
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(Theme.Color.limeDeep)
                 }
             }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 14)
+            .background(
+                RoundedRectangle(cornerRadius: Theme.Metrics.cardRadius, style: .continuous)
+                    .fill(isSelected ? Theme.Color.lime.opacity(0.35) : SwiftUI.Color.white)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: Theme.Metrics.cardRadius, style: .continuous)
+                    .strokeBorder(Theme.Color.hairline)
+            )
         }
+        .buttonStyle(.plain)
     }
 
     private var continueButton: some View {
@@ -80,10 +99,15 @@ struct OnboardingLanguageView: View {
             onSelect?(internalSelected)
         } label: {
             Text("Continue")
+                .font(Theme.Typography.body(16, weight: .semibold))
                 .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
         }
         .buttonStyle(.borderedProminent)
+        .tint(Theme.Color.lime)
+        .foregroundStyle(Theme.Color.ink)
         .padding()
+        .background(Theme.Color.paper)
     }
 }
 

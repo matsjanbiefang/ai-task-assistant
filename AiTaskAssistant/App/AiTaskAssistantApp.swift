@@ -5,6 +5,12 @@ import UserNotifications
 @main
 struct AiTaskAssistantApp: App {
     @State private var deepLinkDestination: AppDestination?
+    // Real-device feedback: "the selected language should change the language of the whole app" —
+    // rather than a second, separate app-language setting, this reuses the existing note-taking
+    // language choice (set at onboarding, changeable anytime in Settings) as the single source of
+    // truth for both. `.environment(\.locale, ...)` at the root re-resolves every `Text`/`Button`/
+    // etc. string-literal lookup against the String Catalog immediately, with no relaunch needed.
+    @AppStorage("primaryLanguageCode") private var primaryLanguageCode = "en"
     private let sharedContainer = SharedModelContainer.make()
 
     init() {
@@ -16,6 +22,7 @@ struct AiTaskAssistantApp: App {
         WindowGroup {
             ContentView(deepLinkDestination: $deepLinkDestination)
                 .modelContainer(sharedContainer)
+                .environment(\.locale, Locale(identifier: primaryLanguageCode))
                 .onOpenURL { url in
                     handleDeepLink(url)
                 }

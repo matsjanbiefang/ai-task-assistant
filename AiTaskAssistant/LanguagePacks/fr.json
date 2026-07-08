@@ -39,7 +39,7 @@
   },
   "categoryKeywords": {
     "work": ["travail", "réunion", "projet", "client", "bureau"],
-    "health": ["médecin", "dentiste", "rendez-vous", "gym", "santé"],
+    "health": ["médecin", "dentiste", "gym", "santé"],
     "shopping": ["acheter", "courses", "magasin"],
     "finance": ["payer", "facture", "banque", "impôts"]
   },
